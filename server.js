@@ -1,10 +1,4 @@
-// server.js
-// ไฟล์หลักของฝั่ง backend ใช้ Express สร้าง REST API สำหรับ ecommerce
-// - กำหนด middleware (morgan, cors, body parser)
-// - mount routes จากโฟลเดอร์ routes
-// - มี error handler และ 404 handler
 require("dotenv").config();
-
 const express = require("express");
 const app = express();
 const morgan = require("morgan");
@@ -17,27 +11,19 @@ app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 app.use(cors({ origin: true, credentials: true }));
 
-// Mount /api/subsubcategory and /api/review explicitly first
+// Mount explicit routes first
 app.use(
   "/api/subsubcategory",
   require(path.join(__dirname, "routes", "subsubcategory"))
 );
 app.use("/api/review", require(path.join(__dirname, "routes", "review")));
-
-// Mount shipping route explicitly
 app.use("/api/shipping", require(path.join(__dirname, "routes", "shipping")));
 
-// Mount route อื่น ๆ
+// Mount all other routes in /routes
 const routesDir = path.join(__dirname, "routes");
-try {
-  readdirSync(routesDir)
-    .filter((p) => p !== "subsubcategory.js" && p !== "review.js")
-    .map((p) => app.use("/api", require(path.join(routesDir, p))));
-} catch (err) {
-  console.error("Failed to mount routes from", routesDir, err.message);
-}
-
-app.listen(5005, () => console.log("Server is Running on port 5005"));
+readdirSync(routesDir)
+  .filter((p) => !["subsubcategory.js", "review.js", "shipping.js"].includes(p))
+  .map((p) => app.use("/api", require(path.join(routesDir, p))));
 
 // 404 handler
 app.use((req, res, next) => {
@@ -49,3 +35,7 @@ app.use((err, req, res, next) => {
   console.error(`Error on ${req.method} ${req.originalUrl}:`, err.stack);
   res.status(500).json({ message: "Something broke!", error: err.message });
 });
+
+// ❌ ลบ app.listen(5005)
+// ✅ export app ให้ Vercel ใช้
+module.exports = app;
