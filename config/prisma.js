@@ -110,8 +110,7 @@ if (isProd) {
     productOnOrder: makeModelMock("productOnOrder"),
     productOnCart: makeModelMock("productOnCart"),
     productVariant: makeModelMock("productVariant"),
-    image: makeModelMock("image"),
-    variantImage: makeModelMock("variantImage"),
+    // image and variantImage models removed; images are stored as JSON on product/productVariant
     review: makeModelMock("review"),
     address: makeModelMock("address"),
     user: makeModelMock("user"),

@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
@@ -113,7 +113,7 @@ model Product {
 
   orderItems ProductOnOrder[]
   cartItems  ProductOnCart[]
-  images     Image[]
+  images     String?          @db.Text
 
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -138,7 +138,7 @@ model ProductVariant {
   attributes Json? // e.g. { "color": "red", "size": "M" }
   isActive   Boolean @default(true)
 
-  images VariantImage[]
+  images String? @db.Text
 
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
@@ -148,18 +148,6 @@ model ProductVariant {
 }
 
 // Images specific to variants (keeps existing Product->Image untouched)
-model VariantImage {
-  id         Int      @id @default(autoincrement())
-  asset_id   String
-  public_id  String
-  url        String
-  secure_url String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  productVariantId Int
-  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
-}
 
 model Order {
   id              Int              @id @default(autoincrement())
@@ -251,19 +239,6 @@ model ProductOnCart {
 
   count Int
   price Float
-}
-
-model Image {
-  id         Int      @id @default(autoincrement())
-  asset_id   String
-  public_id  String
-  url        String
-  secure_url String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  productId Int
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
 model Review {

@@ -1,47 +1,21 @@
 require("dotenv").config();
 const prisma = require("../config/prisma");
-const cloudinary = require("cloudinary").v2;
 
-exports.listByBrand = async (req, res) => {
-  try {
-    const { brand } = req.query;
-    if (!brand) return res.json([]);
-    const products = await prisma.product.findMany({
-      where: {
-        brand: {
-          name: {
-            equals: brand,
-            mode: "insensitive",
-          },
-        },
-      },
-      include: {
-        category: true,
-        subcategory: true,
-        subSubcategory: true,
-        brand: true,
-        images: true,
-      },
-    });
-    res.json(products);
-  } catch (err) {
-    console.error(err && err.stack ? err.stack : err);
-    if (process.env.NODE_ENV !== "production") {
-      return res
-        .status(500)
-        .json({ message: "Server error", error: err.message || String(err) });
+// Helper to safely parse images JSON
+function parseImagesField(field) {
+  if (!field) return [];
+  if (Array.isArray(field)) return field;
+  if (typeof field === "string") {
+    try {
+      return JSON.parse(field);
+    } catch (e) {
+      return [];
     }
-    res.status(500).json({ message: "Server error" });
   }
-};
+  return [];
+}
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// สร้างสินค้าใหม่ พร้อมอัปโหลดรูปภาพ
+// Create product (store images as JSON)
 exports.create = async (req, res) => {
   try {
     const {
@@ -60,50 +34,23 @@ exports.create = async (req, res) => {
       data: {
         title,
         description,
-        price: parseFloat(price),
-        quantity: parseInt(quantity),
-        categoryId: parseInt(categoryId),
+        price: price !== undefined && price !== null ? parseFloat(price) : null,
+        quantity:
+          quantity !== undefined && quantity !== null ? parseInt(quantity) : 0,
+        categoryId: categoryId ? parseInt(categoryId) : null,
         brandId: brandId ? parseInt(brandId) : null,
         subcategoryId: subcategoryId ? parseInt(subcategoryId) : null,
         subSubcategoryId: subSubcategoryId ? parseInt(subSubcategoryId) : null,
-        images: {
-          create: images
-            .filter((item) => item && item.url)
-            .map((item) => ({
-              asset_id: item.asset_id || "",
-              public_id: item.public_id || "",
-              url: item.url || "",
-              secure_url: item.secure_url || item.url || "",
-            })),
-        },
+        images: Array.isArray(images) ? JSON.stringify(images) : images || "",
       },
     });
 
-    // If variants provided in request body, persist them and their images
+    // create variants if provided
     if (Array.isArray(req.body.variants) && req.body.variants.length) {
       try {
-        const variants = req.body.variants;
         await Promise.all(
-          variants.map(async (v) => {
-            // Normalize images array: may contain strings or objects
+          req.body.variants.map(async (v) => {
             const imgs = Array.isArray(v.images) ? v.images : [];
-            const createImages = imgs.filter(Boolean).map((img) => {
-              if (typeof img === "string") {
-                return {
-                  asset_id: "",
-                  public_id: "",
-                  url: img || "",
-                  secure_url: img || "",
-                };
-              }
-              return {
-                asset_id: img.asset_id || "",
-                public_id: img.public_id || "",
-                url: img.url || "",
-                secure_url: img.secure_url || img.url || "",
-              };
-            });
-
             await prisma.productVariant.create({
               data: {
                 productId: product.id,
@@ -124,40 +71,42 @@ exports.create = async (req, res) => {
                   v.attributes && Object.keys(v.attributes).length
                     ? v.attributes
                     : null,
-                images: createImages.length
-                  ? { create: createImages }
-                  : undefined,
+                images: imgs.length ? JSON.stringify(imgs) : "",
               },
             });
           })
         );
 
-        // Reload product including variants and images to return complete data
         const productWithVariants = await prisma.product.findUnique({
           where: { id: product.id },
           include: {
-            images: true,
-            variants: { include: { images: true } },
+            variants: true,
             category: true,
             subcategory: true,
             subSubcategory: true,
             brand: true,
           },
         });
-
+        if (productWithVariants) {
+          productWithVariants.images = parseImagesField(
+            productWithVariants.images
+          );
+          if (Array.isArray(productWithVariants.variants))
+            productWithVariants.variants.forEach(
+              (v) => (v.images = parseImagesField(v.images))
+            );
+        }
         return res.status(201).json(productWithVariants);
       } catch (err) {
         console.error("Error creating variants:", err);
-        // If variant creation fails, still respond with created product (without variants)
-        // but log error and return 201 with the base product to avoid losing the created product.
         return res.status(201).json(product);
       }
     }
 
+    product.images = parseImagesField(product.images);
     res.status(201).json(product);
   } catch (err) {
     console.error(err && err.stack ? err.stack : err);
-    // Prisma unique constraint error (e.g., duplicate sku) -> surface as 400
     if (err && err.code === "P2002") {
       const target = err.meta && err.meta.target ? err.meta.target : undefined;
       const msg = `Unique constraint failed${
@@ -165,18 +114,15 @@ exports.create = async (req, res) => {
       }`;
       return res.status(400).json({ message: msg, code: err.code });
     }
-    if (process.env.NODE_ENV !== "production") {
-      return res.status(500).json({
-        message: "Server error",
-        error: err.message || String(err),
-        code: err.code,
-      });
-    }
+    if (process.env.NODE_ENV !== "production")
+      return res
+        .status(500)
+        .json({ message: "Server error", error: err.message || String(err) });
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ดึงสินค้า (limit ตาม count ที่ส่งมา)
+// List products (with pagination param)
 exports.list = async (req, res) => {
   try {
     let { count } = req.params;
@@ -190,23 +136,22 @@ exports.list = async (req, res) => {
         category: true,
         subcategory: true,
         subSubcategory: true,
-        images: true,
         brand: true,
       },
     });
+    products.forEach((p) => (p.images = parseImagesField(p.images)));
     res.json(products);
   } catch (err) {
-    console.error("listby error:", err && err.stack ? err.stack : err);
-    if (process.env.NODE_ENV !== "production") {
+    console.error("list error:", err && err.stack ? err.stack : err);
+    if (process.env.NODE_ENV !== "production")
       return res
         .status(500)
         .json({ message: "Server error", error: err.message || String(err) });
-    }
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ดึงสินค้าโดย id
+// Read product by ID
 exports.read = async (req, res) => {
   try {
     const { id } = req.params;
@@ -216,15 +161,14 @@ exports.read = async (req, res) => {
         category: true,
         subcategory: true,
         subSubcategory: true,
-        images: true,
         brand: true,
-        // include variants and their images so frontend can display sub-products
-        variants: { include: { images: true } },
+        variants: true,
       },
     });
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
-    }
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    product.images = parseImagesField(product.images);
+    if (Array.isArray(product.variants))
+      product.variants.forEach((v) => (v.images = parseImagesField(v.images)));
     res.json(product);
   } catch (err) {
     console.error(err);
@@ -232,7 +176,7 @@ exports.read = async (req, res) => {
   }
 };
 
-// อัปเดตสินค้า
+// Update product and sync variants
 exports.update = async (req, res) => {
   try {
     const {
@@ -246,195 +190,94 @@ exports.update = async (req, res) => {
       subcategoryId,
       subSubcategoryId,
     } = req.body;
-
     const productId = Number(req.params.id);
-    // Debug: log incoming payload to help diagnose 500 errors during update
-    if (process.env.NODE_ENV !== "production") {
-      try {
-        // console.log(
-        //   "DEBUG product.update payload:",
-        //   JSON.stringify(req.body, null, 2)
-        // );
-      } catch (e) {
-        // console.log("DEBUG product.update payload: [unserializable payload]");
-      }
-    }
 
-    // ลบรูปภาพเก่า
-    await prisma.image.deleteMany({ where: { productId } });
-
-    // อัปเดตสินค้าและสร้างรูปภาพใหม่ (filter เฉพาะรูปที่ข้อมูลครบ)
     const product = await prisma.product.update({
       where: { id: productId },
       data: {
         title,
         description,
         brandId: brandId ? parseInt(brandId) : null,
-        price: parseFloat(price),
-        quantity: parseInt(quantity),
-        categoryId: parseInt(categoryId),
+        price: price !== undefined && price !== null ? parseFloat(price) : null,
+        quantity:
+          quantity !== undefined && quantity !== null ? parseInt(quantity) : 0,
+        categoryId: categoryId ? parseInt(categoryId) : null,
         subcategoryId: subcategoryId ? parseInt(subcategoryId) : null,
         subSubcategoryId: subSubcategoryId ? parseInt(subSubcategoryId) : null,
-        images: {
-          create: images
-            .filter((item) => item && item.url)
-            .map((item) => ({
-              asset_id: item.asset_id || null,
-              public_id: item.public_id || null,
-              url: item.url,
-              secure_url: item.secure_url || item.url || null,
-            })),
-        },
+        images: Array.isArray(images) ? JSON.stringify(images) : images || "",
       },
     });
-    // If variants were provided in the request body, sync them: create, update or delete as needed
+
     if (Array.isArray(req.body.variants)) {
       const incoming = req.body.variants;
-
-      // Fetch existing variants for this product (and their images)
       const existingVariants = await prisma.productVariant.findMany({
         where: { productId },
-        include: { images: true },
       });
-
       const existingIds = existingVariants.map((v) => v.id).filter(Boolean);
       const incomingIds = incoming
         .map((v) => (v.id ? Number(v.id) : null))
         .filter(Boolean);
 
-      // Preflight: check duplicate SKUs in payload
       const incomingSkuList = incoming
         .map((v) => (v.sku ? String(v.sku).trim() : null))
         .filter((s) => s && s.length);
       if (incomingSkuList.length) {
         const seen = new Set();
         for (const sku of incomingSkuList) {
-          if (seen.has(sku)) {
+          if (seen.has(sku))
             return res
               .status(400)
               .json({ message: `Duplicate SKU in payload: ${sku}` });
-          }
           seen.add(sku);
         }
-
-        // Check conflict with other existing variants (exclude incomingIds)
         const conflict = await prisma.productVariant.findFirst({
           where: {
             sku: { in: incomingSkuList },
             id: { notIn: incomingIds.length ? incomingIds : [0] },
           },
         });
-        if (conflict) {
-          return res.status(400).json({
-            message: `SKU conflict with existing variant id=${conflict.id}`,
-            sku: conflict.sku,
-          });
-        }
+        if (conflict)
+          return res
+            .status(400)
+            .json({
+              message: `SKU conflict with existing variant id=${conflict.id}`,
+              sku: conflict.sku,
+            });
       }
 
-      // Delete variants that are not present in incoming list
       const toDelete = existingIds.filter((id) => !incomingIds.includes(id));
-      if (toDelete.length) {
-        // Delete variant images from Cloudinary (best-effort)
-        const imgsToDelete = await prisma.variantImage.findMany({
-          where: { productVariantId: { in: toDelete } },
-        });
-        await Promise.all(
-          imgsToDelete.map(async (img) => {
-            if (!img || !img.public_id) return null;
-            try {
-              return await cloudinary.uploader.destroy(img.public_id);
-            } catch (err) {
-              console.error(
-                `Cloudinary destroy failed for variant image public_id=${img.public_id}:`,
-                err && err.message ? err.message : err
-              );
-              return null;
-            }
-          })
-        );
-
-        // Remove variant image records and the variants themselves
-        await prisma.variantImage.deleteMany({
-          where: { productVariantId: { in: toDelete } },
-        });
+      if (toDelete.length)
         await prisma.productVariant.deleteMany({
           where: { id: { in: toDelete } },
         });
-      }
 
-      // Upsert incoming variants
       for (const v of incoming) {
         let vId = v.id ? Number(v.id) : null;
-        // If no id provided but SKU present, try to resolve to an existing variant by SKU.
         if (!vId && v.sku) {
-          try {
-            const found = await prisma.productVariant.findFirst({
-              where: { sku: String(v.sku).trim() },
+          const found = await prisma.productVariant
+            .findFirst({ where: { sku: String(v.sku).trim() } })
+            .catch((e) => {
+              console.error("SKU lookup error", e);
+              return null;
             });
-            if (found) {
-              if (found.productId === productId) {
-                // treat as update to existing variant of this product
-                vId = found.id;
-              } else {
-                // SKU exists on a different product -> conflict
-                return res.status(400).json({
+          if (found) {
+            if (found.productId === productId) vId = found.id;
+            else
+              return res
+                .status(400)
+                .json({
                   message: `SKU conflict with existing variant id=${found.id}`,
                   sku: found.sku,
                 });
-              }
-            }
-          } catch (err) {
-            console.error(
-              "Error resolving variant by SKU:",
-              err && err.message ? err.message : err
-            );
           }
         }
-        const imagesArr = Array.isArray(v.images) ? v.images : [];
 
-        const createImages = imagesArr
-          .filter((i) => i)
-          .map((i) => {
-            if (typeof i === "string") {
-              return {
-                asset_id: "",
-                public_id: "",
-                url: i || "",
-                secure_url: i || "",
-              };
-            }
-            return {
-              asset_id: i.asset_id || "",
-              public_id: i.public_id || "",
-              url: i.url || "",
-              secure_url: i.secure_url || i.url || "",
-            };
-          });
+        const imagesArr = Array.isArray(v.images) ? v.images : [];
+        const imgsJson = imagesArr.filter(Boolean).length
+          ? JSON.stringify(imagesArr.filter(Boolean))
+          : "";
 
         if (vId) {
-          // remove old variant images (and Cloudinary objects) then add new images
-          const existingImgs = await prisma.variantImage.findMany({
-            where: { productVariantId: vId },
-          });
-          await Promise.all(
-            existingImgs.map(async (img) => {
-              if (!img.public_id) return null;
-              try {
-                return await cloudinary.uploader.destroy(img.public_id);
-              } catch (err) {
-                console.error(
-                  `Cloudinary destroy failed for variant image public_id=${img.public_id}:`,
-                  err && err.message ? err.message : err
-                );
-                return null;
-              }
-            })
-          );
-          await prisma.variantImage.deleteMany({
-            where: { productVariantId: vId },
-          });
-
           await prisma.productVariant.update({
             where: { id: vId },
             data: {
@@ -455,13 +298,10 @@ exports.update = async (req, res) => {
                 v.attributes && Object.keys(v.attributes || {}).length
                   ? v.attributes
                   : null,
-              images: createImages.length
-                ? { create: createImages }
-                : undefined,
+              images: imgsJson,
             },
           });
         } else {
-          // create new variant
           await prisma.productVariant.create({
             data: {
               productId: product.id,
@@ -482,29 +322,35 @@ exports.update = async (req, res) => {
                 v.attributes && Object.keys(v.attributes || {}).length
                   ? v.attributes
                   : null,
-              images: createImages.length
-                ? { create: createImages }
-                : undefined,
+              images: imgsJson,
             },
           });
         }
       }
 
-      // Return product with variants included
       const productWithVariants = await prisma.product.findUnique({
         where: { id: productId },
         include: {
-          images: true,
-          variants: { include: { images: true } },
+          variants: true,
           category: true,
           subcategory: true,
           subSubcategory: true,
           brand: true,
         },
       });
+      if (productWithVariants) {
+        productWithVariants.images = parseImagesField(
+          productWithVariants.images
+        );
+        if (Array.isArray(productWithVariants.variants))
+          productWithVariants.variants.forEach(
+            (v) => (v.images = parseImagesField(v.images))
+          );
+      }
       return res.json(productWithVariants);
     }
 
+    product.images = parseImagesField(product.images);
     res.json(product);
   } catch (err) {
     console.error(err);
@@ -512,155 +358,41 @@ exports.update = async (req, res) => {
   }
 };
 
-// ลบสินค้าและลบรูปภาพใน Cloudinary ด้วย
+// Delete product and its variants
 exports.remove = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const product = await prisma.product.findFirst({
-      where: { id: Number(id) },
-      include: { images: true },
+    const productId = Number(id);
+    const existing = await prisma.product.findUnique({
+      where: { id: productId },
     });
+    if (!existing)
+      return res.status(404).json({ message: "Product not found" });
 
-    if (!product) return res.status(404).json({ message: "Product not found" });
-
-    // --- First, remove any variants (and their images) to avoid FK / constraint errors ---
-    const variants = await prisma.productVariant.findMany({
-      where: { productId: Number(id) },
-      include: { images: true },
-    });
-
-    if (variants && variants.length) {
-      // delete variant images on Cloudinary (best-effort)
-      await Promise.all(
-        variants
-          .flatMap((v) => v.images || [])
-          .map(async (image) => {
-            if (!image || !image.public_id) return null;
-            try {
-              return await cloudinary.uploader.destroy(image.public_id);
-            } catch (err) {
-              console.error(
-                `Cloudinary destroy failed for variant image public_id=${image.public_id}:`,
-                err && err.message ? err.message : err
-              );
-              return null;
-            }
-          })
-      );
-
-      // remove variant image records from DB
-      try {
-        const variantIds = variants.map((v) => v.id).filter(Boolean);
-        if (variantIds.length) {
-          await prisma.variantImage.deleteMany({
-            where: { productVariantId: { in: variantIds } },
-          });
-        }
-      } catch (err) {
-        console.error(
-          "Error deleting variant image records:",
-          err && err.message ? err.message : err
-        );
-      }
-
-      // remove variants themselves
-      try {
-        await prisma.productVariant.deleteMany({
-          where: { productId: Number(id) },
-        });
-      } catch (err) {
-        console.error(
-          "Error deleting product variants:",
-          err && err.message ? err.message : err
-        );
-        // continue - we'll attempt to delete product below which may still fail if FK exists
-      }
-    }
-
-    // Then, delete product images on Cloudinary (best-effort)
-    await Promise.all(
-      (product.images || []).map(async (image) => {
-        if (!image || !image.public_id) return null;
-        try {
-          return await cloudinary.uploader.destroy(image.public_id);
-        } catch (err) {
-          console.error(
-            `Cloudinary destroy failed for public_id=${image.public_id}:`,
-            err && err.message ? err.message : err
-          );
-          return null;
-        }
-      })
-    );
-
-    // remove product image records from DB (best-effort)
-    try {
-      await prisma.image.deleteMany({ where: { productId: Number(id) } });
-    } catch (err) {
-      console.error(
-        "Error deleting product image records:",
-        err && err.message ? err.message : err
-      );
-    }
-
-    // remove reviews and return-product records referencing this product (no ON DELETE CASCADE in schema)
-    try {
-      await prisma.returnProduct.deleteMany({
-        where: { productId: Number(id) },
-      });
-    } catch (err) {
-      console.error(
-        "Error deleting return-product records:",
-        err && err.message ? err.message : err
-      );
-    }
-    try {
-      await prisma.review.deleteMany({ where: { productId: Number(id) } });
-    } catch (err) {
-      console.error(
-        "Error deleting review records:",
-        err && err.message ? err.message : err
-      );
-    }
-
-    // Finally, remove the product record
-    try {
-      await prisma.product.delete({ where: { id: Number(id) } });
-      res.json({ message: "Delete Success" });
-    } catch (err) {
-      // log full stack and return helpful message in non-production for debugging
-      console.error(
-        "Error deleting product record:",
-        err && err.stack ? err.stack : err
-      );
-      if (process.env.NODE_ENV !== "production") {
-        return res.status(500).json({
-          message: "Error deleting product",
-          error: err.message || String(err),
-        });
-      }
-      return res.status(500).json({ message: "Server error" });
-    }
+    await prisma.productVariant.deleteMany({ where: { productId } });
+    await prisma.returnProduct
+      .deleteMany({ where: { productId } })
+      .catch((e) => console.error("returnProduct delete error", e));
+    await prisma.review
+      .deleteMany({ where: { productId } })
+      .catch((e) => console.error("review delete error", e));
+    await prisma.product.delete({ where: { id: productId } });
+    res.json({ message: "Delete Success" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ดึงสินค้าตาม subcategoryId
+// List by subcategory
 exports.listBySubcategory = async (req, res) => {
   try {
     const { subcategoryId } = req.params;
     const products = await prisma.product.findMany({
       where: { subcategoryId: Number(subcategoryId) },
-      include: {
-        category: true,
-        subcategory: true,
-        subSubcategory: true,
-        images: true,
-      },
+      include: { category: true, subcategory: true, subSubcategory: true },
     });
+    products.forEach((p) => (p.images = parseImagesField(p.images)));
     res.json(products);
   } catch (err) {
     console.error(err);
@@ -668,9 +400,9 @@ exports.listBySubcategory = async (req, res) => {
   }
 };
 
+// Flexible list
 exports.listby = async (req, res) => {
   try {
-    // ตัวอย่างโค้ด สำหรับดึงสินค้าตามเงื่อนไขง่ายๆ
     const allowedSortFields = [
       "id",
       "title",
@@ -686,21 +418,17 @@ exports.listby = async (req, res) => {
       "updatedAt",
     ];
     const allowedOrder = ["asc", "desc"];
-
     let { sort = "createdAt", order = "desc", limit } = req.body;
     sort = allowedSortFields.includes(sort) ? sort : "createdAt";
     order = allowedOrder.includes(String(order).toLowerCase())
       ? String(order).toLowerCase()
       : "desc";
-
-    // ถ้า limit ไม่ถูกส่งมา หรือเป็น 'all' หรือ <= 0 ให้แสดงสินค้าทั้งหมด
     let findManyArgs = {
       orderBy: { [sort]: order },
       include: {
         category: true,
         subcategory: true,
         subSubcategory: true,
-        images: true,
         brand: true,
       },
     };
@@ -711,99 +439,56 @@ exports.listby = async (req, res) => {
       limit !== "all" &&
       !isNaN(parseInt(limit)) &&
       parseInt(limit) > 0
-    ) {
+    )
       findManyArgs.take = parseInt(limit);
-    }
-
     const products = await prisma.product.findMany(findManyArgs);
+    products.forEach((p) => (p.images = parseImagesField(p.images)));
     res.json(products);
   } catch (err) {
     console.error("product.listby error:", err && err.stack ? err.stack : err);
-    if (process.env.NODE_ENV !== "production") {
-      return res
-        .status(500)
-        .json({ message: "Server error", error: err.message || String(err) });
-    }
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ฟังก์ชันค้นหาและกรองสินค้าแบบรวม (searchfilters)
+// Search and filters
 exports.searchfilters = async (req, res) => {
   try {
     const { query, category, price } = req.body;
     let where = {};
-
-    if (query) {
+    if (query)
       where.OR = [
         { title: { contains: query } },
         { description: { contains: query } },
       ];
-    }
-    if (price) {
-      where.price = {
-        gte: price[0],
-        lte: price[1],
-      };
-    }
-    if (category && category.length > 0) {
-      where.categoryId = {
-        in: category.map((id) => Number(id)),
-      };
-    }
-
+    if (price) where.price = { gte: price[0], lte: price[1] };
+    if (category && category.length > 0)
+      where.categoryId = { in: category.map((id) => Number(id)) };
     const products = await prisma.product.findMany({
       where,
-      include: { category: true, images: true, brand: true },
+      include: { category: true, brand: true },
     });
-
+    products.forEach((p) => (p.images = parseImagesField(p.images)));
     res.json(products);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// อัปโหลดรูปภาพขึ้น Cloudinary
+// Image upload endpoint: now a no-op that echoes data back; client saves into product.images or variant.images
 exports.createImages = async (req, res) => {
   try {
-    const imageBase64 = req.body.image || req.body;
-    const result = await cloudinary.uploader.upload(imageBase64, {
-      folder: "PetShopOnline",
-      public_id: `PetS${Date.now()}`,
-      resource_type: "auto",
-    });
-
-    res.json({
-      asset_id: result.asset_id,
-      public_id: result.public_id,
-      url: result.url,
-      secure_url: result.secure_url,
-    });
+    const imageData = req.body.image || req.body;
+    res.json({ data: imageData });
   } catch (err) {
-    console.error("Cloudinary upload error:", err.message, err);
-
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
 
-// ลบรูปภาพจาก Cloudinary
+// Remove image endpoint: no-op in DB-stored image flow
 exports.removeImage = async (req, res) => {
   try {
-    const { public_id } = req.body;
-    if (!public_id)
-      return res.status(400).json({ message: "public_id required" });
-    try {
-      await cloudinary.uploader.destroy(public_id);
-      res.json({ message: "Remove Image Success" });
-    } catch (err) {
-      console.error(
-        "Cloudinary destroy error:",
-        err && err.message ? err.message : err
-      );
-      res.status(500).json({ message: "Error removing image" });
-    }
+    res.json({ success: true });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server Error" });
   }
 };

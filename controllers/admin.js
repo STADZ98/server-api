@@ -114,8 +114,8 @@ exports.getOrdersAdmin = async (req, res) => {
         address: { select: { name: true, address: true, telephone: true } },
         products: {
           include: {
-            product: { include: { category: true, images: true } },
-            variant: { include: { images: true } },
+            product: { include: { category: true } },
+            variant: { include: {} },
           },
         },
       },
@@ -149,18 +149,38 @@ exports.getOrdersAdmin = async (req, res) => {
 
         if (Array.isArray(order.products)) {
           mo.products = order.products.map((p) => {
+            // product.images and variant.images are stored as JSON strings or arrays
+            const prodImgs =
+              p.product && p.product.images
+                ? Array.isArray(p.product.images)
+                  ? p.product.images
+                  : (() => {
+                      try {
+                        return JSON.parse(p.product.images);
+                      } catch (e) {
+                        return [];
+                      }
+                    })()
+                : [];
+            const varImgs =
+              p.variant && p.variant.images
+                ? Array.isArray(p.variant.images)
+                  ? p.variant.images
+                  : (() => {
+                      try {
+                        return JSON.parse(p.variant.images);
+                      } catch (e) {
+                        return [];
+                      }
+                    })()
+                : [];
+
             const productImage =
-              p.product &&
-              Array.isArray(p.product.images) &&
-              p.product.images.length > 0
-                ? p.product.images[0].url || p.product.images[0]
+              prodImgs && prodImgs.length
+                ? prodImgs[0].url || prodImgs[0]
                 : null;
             const variantImage =
-              p.variant &&
-              Array.isArray(p.variant.images) &&
-              p.variant.images.length > 0
-                ? p.variant.images[0].url || p.variant.images[0]
-                : null;
+              varImgs && varImgs.length ? varImgs[0].url || varImgs[0] : null;
 
             return {
               id: p.id,

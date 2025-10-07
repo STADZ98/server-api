@@ -1,14 +1,21 @@
 require("dotenv").config();
 const prisma = require("../config/prisma");
-const cloudinary = require("cloudinary").v2;
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+// Helper to safely parse images JSON
+function parseImagesField(field) {
+  if (!field) return [];
+  if (Array.isArray(field)) return field;
+  if (typeof field === "string") {
+    try {
+      return JSON.parse(field);
+    } catch (e) {
+      return [];
+    }
+  }
+  return [];
+}
 
-// สร้าง variant ให้กับ product
+// Create variant for a product
 exports.createVariant = async (req, res) => {
   try {
     const { productId, title, sku, price, quantity, attributes, images } =
@@ -23,65 +30,52 @@ exports.createVariant = async (req, res) => {
       price: price !== undefined && price !== null ? parseFloat(price) : null,
       quantity: quantity !== undefined ? parseInt(quantity) : 0,
       attributes: attributes ? attributes : null,
+      images: Array.isArray(images) ? JSON.stringify(images) : images || "",
     };
 
-    if (images && Array.isArray(images) && images.length > 0) {
-      data.images = {
-        create: images
-          .filter((i) => i && i.url)
-          .map((i) => ({
-            asset_id: i.asset_id || "",
-            public_id: i.public_id || "",
-            url: i.url || "",
-            secure_url: i.secure_url || i.url || "",
-          })),
-      };
-    }
-
-    const variant = await prisma.productVariant.create({
-      data,
-      include: { images: true },
-    });
+    const variant = await prisma.productVariant.create({ data });
+    variant.images = parseImagesField(variant.images);
     res.status(201).json(variant);
   } catch (err) {
-    console.error(err);
+    console.error(err && err.stack ? err.stack : err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ดึง variants ของ product
+// List variants of a product
 exports.listByProduct = async (req, res) => {
   try {
     const { productId } = req.params;
     const variants = await prisma.productVariant.findMany({
       where: { productId: Number(productId) },
-      include: { images: true },
       orderBy: { createdAt: "desc" },
     });
+    variants.forEach((v) => (v.images = parseImagesField(v.images)));
     res.json(variants);
   } catch (err) {
-    console.error(err);
+    console.error(err && err.stack ? err.stack : err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// อ่าน variant เดียว
+// Read single variant
 exports.readVariant = async (req, res) => {
   try {
     const { id } = req.params;
     const variant = await prisma.productVariant.findFirst({
       where: { id: Number(id) },
-      include: { images: true, product: true },
+      include: { product: true },
     });
     if (!variant) return res.status(404).json({ message: "Variant not found" });
+    variant.images = parseImagesField(variant.images);
     res.json(variant);
   } catch (err) {
-    console.error(err);
+    console.error(err && err.stack ? err.stack : err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// อัปเดต variant
+// Update variant
 exports.updateVariant = async (req, res) => {
   try {
     const { id } = req.params;
@@ -95,130 +89,59 @@ exports.updateVariant = async (req, res) => {
     if (quantity !== undefined) updateData.quantity = parseInt(quantity);
     if (attributes !== undefined) updateData.attributes = attributes;
 
-    // ถ้ามี images ส่งมา ให้ลบภาพเก่าจาก Cloudinary แล้วสร้าง images ใหม่
-    if (images && Array.isArray(images)) {
-      const existingImages = await prisma.variantImage.findMany({
-        where: { productVariantId: Number(id) },
-      });
-      await Promise.all(
-        existingImages.map(async (img) => {
-          if (!img.public_id) return null;
-          try {
-            return await cloudinary.uploader.destroy(img.public_id);
-          } catch (err) {
-            console.error(
-              `Cloudinary destroy failed for variant image public_id=${img.public_id}:`,
-              err && err.message ? err.message : err
-            );
-            return null;
-          }
-        })
-      );
-
-      await prisma.variantImage.deleteMany({
-        where: { productVariantId: Number(id) },
-      });
-
-      updateData.images = {
-        create: images
-          .filter((i) => i && i.url)
-          .map((i) => ({
-            asset_id: i.asset_id || "",
-            public_id: i.public_id || "",
-            url: i.url || "",
-            secure_url: i.secure_url || i.url || "",
-          })),
-      };
+    if (images !== undefined) {
+      updateData.images = Array.isArray(images)
+        ? JSON.stringify(images)
+        : images || "";
     }
 
     const variant = await prisma.productVariant.update({
       where: { id: Number(id) },
       data: updateData,
-      include: { images: true },
     });
-
+    variant.images = parseImagesField(variant.images);
     res.json(variant);
   } catch (err) {
-    console.error(err);
+    console.error(err && err.stack ? err.stack : err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ลบ variant พร้อมรูปภาพบน Cloudinary
+// Remove variant (no Cloudinary, no VariantImage model)
 exports.removeVariant = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log("removeVariant called for id=", id);
     const idNum = Number(id);
-    if (!id || Number.isNaN(idNum)) {
+    if (!id || Number.isNaN(idNum))
       return res.status(400).json({ message: "Invalid variant id" });
-    }
 
-    // Load variant with images for cloud deletes
     const variant = await prisma.productVariant.findFirst({
       where: { id: idNum },
-      include: { images: true },
     });
     if (!variant) return res.status(404).json({ message: "Variant not found" });
-    console.log("Found variant:", {
-      id: variant.id,
-      productId: variant.productId,
-      imagesCount: (variant.images || []).length,
-    });
 
-    // Delete images on Cloudinary (best-effort)
-    let cloudDeletes = 0;
-    await Promise.all(
-      (variant.images || []).map(async (image) => {
-        if (!image.public_id) return null;
-        try {
-          cloudDeletes++;
-          return await cloudinary.uploader.destroy(image.public_id);
-        } catch (err) {
-          console.error(
-            `Cloudinary destroy failed for variant image public_id=${image.public_id}:`,
-            err && err.message ? err.message : err
-          );
-          return null;
-        }
-      })
-    );
-    console.log(`Attempted Cloudinary deletes: ${cloudDeletes}`);
-
-    // Use a transaction so deletions happen together and counts are returned
     try {
-      const [cartRes, reviewRes, variantImageRes, deletedVariant] =
-        await prisma.$transaction([
-          prisma.productOnCart.deleteMany({ where: { variantId: idNum } }),
-          prisma.review.deleteMany({ where: { variantId: idNum } }),
-          prisma.variantImage.deleteMany({
-            where: { productVariantId: idNum },
-          }),
-          prisma.productVariant.delete({ where: { id: idNum } }),
-        ]);
+      const [cartRes, reviewRes, deletedVariant] = await prisma.$transaction([
+        prisma.productOnCart.deleteMany({ where: { variantId: idNum } }),
+        prisma.review.deleteMany({ where: { variantId: idNum } }),
+        prisma.productVariant.delete({ where: { id: idNum } }),
+      ]);
 
       const cartDelCount = cartRes?.count || 0;
       const reviewDelCount = reviewRes?.count || 0;
-      const variantImageDelCount = variantImageRes?.count || 0;
-
-      console.log(
-        `Transaction results for variant ${idNum}: cart=${cartDelCount}, reviews=${reviewDelCount}, variantImages=${variantImageDelCount}`
-      );
 
       return res.json({
         message: "Variant deleted",
         counts: {
-          cloudDeletes,
           cartDelCount,
           reviewDelCount,
-          variantImageDelCount,
           deletedVariantId: deletedVariant?.id || null,
         },
       });
     } catch (err) {
       console.error(
         "Error during transactional delete:",
-        err && err.message ? err.message : err
+        err && err.stack ? err.stack : err
       );
       return res
         .status(500)
@@ -228,29 +151,19 @@ exports.removeVariant = async (req, res) => {
         });
     }
   } catch (err) {
-    console.error(err);
+    console.error(err && err.stack ? err.stack : err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// อัปโหลดรูปภาพขึ้น Cloudinary สำหรับ variant (ใช้แยกเมื่อจำเป็น)
+// Upload image endpoint: no Cloudinary, echo back the provided data
 exports.uploadImage = async (req, res) => {
   try {
     const imageBase64 = req.body.image || req.body;
-    const result = await cloudinary.uploader.upload(imageBase64, {
-      folder: "PetShopOnline/variants",
-      public_id: `Var${Date.now()}`,
-      resource_type: "auto",
-    });
-
-    res.json({
-      asset_id: result.asset_id,
-      public_id: result.public_id,
-      url: result.url,
-      secure_url: result.secure_url,
-    });
+    // Echo back and let client persist into variant.images
+    res.json({ data: imageBase64 });
   } catch (err) {
-    console.error("Cloudinary upload error:", err.message, err);
+    console.error(err && err.stack ? err.stack : err);
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
@@ -259,34 +172,13 @@ exports.uploadImage = async (req, res) => {
 exports.checkSku = async (req, res) => {
   try {
     const { sku, excludeId } = req.query;
-    if (process.env.NODE_ENV !== "production") {
-      console.log("checkSku called with:", { sku, excludeId });
-    }
     if (!sku) return res.json({ exists: false });
     const where = { sku: String(sku).trim() };
     if (excludeId) where.id = { not: Number(excludeId) };
-    try {
-      const found = await prisma.productVariant.findFirst({ where });
-      return res.json({ exists: !!found, variant: found || null });
-    } catch (err) {
-      console.error(
-        "Prisma error in checkSku:",
-        err && err.stack ? err.stack : err
-      );
-      if (process.env.NODE_ENV !== "production") {
-        return res
-          .status(500)
-          .json({ message: "Server error", error: err.message || String(err) });
-      }
-      return res.status(500).json({ message: "Server error" });
-    }
+    const found = await prisma.productVariant.findFirst({ where });
+    return res.json({ exists: !!found, variant: found || null });
   } catch (err) {
-    console.error("checkSku outer error:", err && err.stack ? err.stack : err);
-    if (process.env.NODE_ENV !== "production") {
-      return res
-        .status(500)
-        .json({ message: "Server error", error: err.message || String(err) });
-    }
+    console.error(err && err.stack ? err.stack : err);
     res.status(500).json({ message: "Server error" });
   }
 };
