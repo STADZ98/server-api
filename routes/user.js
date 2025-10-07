@@ -1,6 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const { authCheck, adminCheck } = require("../middlewares/authCheck");
+const multer = require("multer");
+
+// use memory storage so we can convert file buffer to base64 and save to DB
+const storage = multer.memoryStorage();
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
 
 const {
   listUsers,
@@ -63,6 +68,11 @@ router.put("/user/address/:id", authCheck, updateAddress); // ✅ Update
 router.delete("/user/address/:id", authCheck, deleteAddress); // ✅ Delete
 
 // 📸 Profile Picture
-router.post("/user/profile-picture", authCheck, uploadProfilePicture);
+router.post(
+  "/user/profile-picture",
+  authCheck,
+  upload.single("file"),
+  uploadProfilePicture
+);
 
 module.exports = router;

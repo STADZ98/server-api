@@ -69,12 +69,7 @@ if (process.env.STRIPE_SECRET) {
     "Stripe not configured; STRIPE_SECRET is missing. Stripe calls will be skipped in user controller."
   );
 }
-const cloudinary = require("cloudinary").v2;
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+
 
 // ✅ ดึงผู้ใช้ทั้งหมด
 exports.listUsers = async (req, res) => {
@@ -953,46 +948,56 @@ exports.cancelOrder = async (req, res) => {
 // ✅ อัปโหลดรูปโปรไฟล์ และเก็บ url ใน user.picture
 exports.uploadProfilePicture = async (req, res) => {
   try {
-    if (!req.user || !req.user.id)
+    // ต้องมี user ที่ล็อกอินอยู่
+    if (!req.user || !req.user.id) {
       return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const { image, userId } = req.body; // expect base64 data or url, optional userId when admin updates other user's picture
-    if (!image) return res.status(400).json({ message: "No image provided" });
-
-    // Determine which user to update: by default update the authenticated user.
-    // If userId is provided and requester is admin, allow updating that user's picture.
     let targetUserId = Number(req.user.id);
-    if (userId && Number(userId) && req.user.role === "admin") {
+    const { userId } = req.body;
+
+    // ถ้าเป็น admin และส่ง userId มาก็ให้เปลี่ยนเป้าหมายได้
+    if (userId && req.user.role === "admin") {
       targetUserId = Number(userId);
     }
 
-    // Optional: verify target user exists
     const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
     });
     if (!targetUser) {
-      return res.status(404).json({ message: "Target user not found" });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    const result = await cloudinary.uploader.upload(image, {
-      public_id: `profile_${targetUserId}_${Date.now()}`,
-      resource_type: "auto",
-      folder: "PetShopOnline/profiles",
-    });
+    let base64Image = null;
 
-    // update user picture field for the target user
+    // ✅ กรณีส่งเป็นไฟล์ (multipart/form-data)
+    if (req.file && req.file.buffer) {
+      base64Image = `data:${
+        req.file.mimetype
+      };base64,${req.file.buffer.toString("base64")}`;
+    }
+
+    // ✅ กรณีส่งมาเป็น base64 ผ่าน JSON body
+    else if (req.body.image && typeof req.body.image === "string") {
+      base64Image = req.body.image;
+    }
+
+    if (!base64Image) {
+      return res.status(400).json({ message: "No image provided" });
+    }
+
+    // ✅ อัปเดตลงในฐานข้อมูล (เก็บเป็น base64 string)
     await prisma.user.update({
       where: { id: targetUserId },
-      data: { picture: result.secure_url },
+      data: { picture: base64Image },
     });
 
     res.json({
-      url: result.secure_url,
-      public_id: result.public_id,
-      updatedUserId: targetUserId,
+      message: "Profile picture updated successfully",
+      userId: targetUserId,
     });
   } catch (err) {
     console.error("uploadProfilePicture error:", err);
-    res.status(500).json({ message: "Server Error" });
+    res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
