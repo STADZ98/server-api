@@ -646,7 +646,113 @@ exports.saveOrder = async (req, res) => {
       where: { orderedById: userId },
     });
 
-    res.json({ ok: true, order });
+    // Map the created order to the same shape returned by getOrder so the client
+    // can use the response immediately without extra fetches. Include normalized
+    // image URLs and shipping/tracking fields.
+    const mapped = {
+      id: order.id,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      cartTotal: order.cartTotal,
+      orderStatus: order.orderStatus || order.status || null,
+      stripePaymentId: order.stripePaymentId || null,
+      amount: order.amount || null,
+      currency: order.currency || null,
+      address: order.address
+        ? {
+            id: order.address.id,
+            name: order.address.name || null,
+            address: order.address.address || null,
+            telephone: order.address.telephone || null,
+          }
+        : null,
+      // name/email convenience fields
+      name: order.address?.name || null,
+      email: null,
+      products: Array.isArray(order.products)
+        ? order.products.map((p) => {
+            const prod = p.product || null;
+            const variant = p.variant || null;
+
+            // parse images that may be stored as JSON strings
+            let prodImgs = [];
+            let varImgs = [];
+            if (prod) {
+              try {
+                prodImgs = Array.isArray(prod.images)
+                  ? prod.images
+                  : prod.images
+                  ? JSON.parse(prod.images)
+                  : [];
+              } catch (e) {
+                prodImgs = [];
+              }
+            }
+            if (variant) {
+              try {
+                varImgs = Array.isArray(variant.images)
+                  ? variant.images
+                  : variant.images
+                  ? JSON.parse(variant.images)
+                  : [];
+              } catch (e) {
+                varImgs = [];
+              }
+            }
+
+            return {
+              id: p.id,
+              productId: p.productId,
+              variantId: p.variantId || null,
+              count: p.count,
+              price: p.price,
+              product: prod
+                ? {
+                    id: prod.id,
+                    title: prod.title,
+                    category: prod.category
+                      ? { id: prod.category.id, name: prod.category.name }
+                      : null,
+                    image: buildImageUrl(
+                      prodImgs && prodImgs.length
+                        ? prodImgs[0]
+                        : prod.image || prod.imageUrl || prod.img || null,
+                      req
+                    ),
+                  }
+                : null,
+              variant: variant
+                ? {
+                    id: variant.id,
+                    title: variant.title,
+                    price: variant.price,
+                    quantity: variant.quantity,
+                    image: buildImageUrl(
+                      varImgs && varImgs.length
+                        ? varImgs[0]
+                        : variant.image ||
+                            variant.imageUrl ||
+                            variant.img ||
+                            null,
+                      req
+                    ),
+                  }
+                : null,
+            };
+          })
+        : [],
+      trackingCarrier: order.trackingCarrier || null,
+      trackingCode: order.trackingCode || null,
+      shippingFee: order.shippingFee || 0,
+    };
+
+    // include detected payment method if available (was set earlier in memory)
+    if (order.paymentMethod) mapped.paymentMethod = order.paymentMethod;
+
+    // mark as server-created so clients can opt-out of extra polling
+    mapped.serverCreated = true;
+
+    res.json({ ok: true, order: mapped });
   } catch (err) {
     console.error("saveOrder error:", err);
     res.status(500).json({ message: "Server Error" });
