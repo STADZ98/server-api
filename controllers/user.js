@@ -70,7 +70,6 @@ if (process.env.STRIPE_SECRET) {
   );
 }
 
-
 // ✅ ดึงผู้ใช้ทั้งหมด
 exports.listUsers = async (req, res) => {
   try {
@@ -723,7 +722,9 @@ exports.getOrder = async (req, res) => {
                           : null,
                         image:
                           prodImgs && prodImgs.length
-                            ? prodImgs[0].url || prodImgs[0]
+                            ? prodImgs[0].secure_url ||
+                              prodImgs[0].url ||
+                              prodImgs[0]
                             : null,
                       }
                     : null,
@@ -735,7 +736,9 @@ exports.getOrder = async (req, res) => {
                         quantity: variant.quantity,
                         image:
                           varImgs && varImgs.length
-                            ? varImgs[0].url || varImgs[0]
+                            ? varImgs[0].secure_url ||
+                              varImgs[0].url ||
+                              varImgs[0]
                             : null,
                       }
                     : null,
