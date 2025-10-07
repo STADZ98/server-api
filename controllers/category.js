@@ -58,6 +58,28 @@ exports.create = async (req, res) => {
 // ดึงรายการทั้งหมด
 exports.list = async (req, res) => {
   try {
+    // log incoming request info for debugging
+    try {
+      const info = {
+        ip: req.ip || req.connection?.remoteAddress || null,
+        method: req.method,
+        path: req.originalUrl || req.url,
+        headers: {
+          host: req.get("host"),
+          referer: req.get("referer") || req.get("referrer"),
+          "user-agent": req.get("user-agent"),
+          authorization: req.get("authorization") ? "<present>" : "<missing>",
+        },
+        query: req.query,
+      };
+      console.info("category.list request:", info);
+    } catch (e) {
+      console.error(
+        "Failed to log request info in category.list:",
+        e && e.stack ? e.stack : e
+      );
+    }
+
     const categories = await prisma.category.findMany();
     res.send(categories);
   } catch (err) {
