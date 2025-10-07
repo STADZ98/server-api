@@ -237,12 +237,10 @@ exports.update = async (req, res) => {
           },
         });
         if (conflict)
-          return res
-            .status(400)
-            .json({
-              message: `SKU conflict with existing variant id=${conflict.id}`,
-              sku: conflict.sku,
-            });
+          return res.status(400).json({
+            message: `SKU conflict with existing variant id=${conflict.id}`,
+            sku: conflict.sku,
+          });
       }
 
       const toDelete = existingIds.filter((id) => !incomingIds.includes(id));
@@ -263,12 +261,10 @@ exports.update = async (req, res) => {
           if (found) {
             if (found.productId === productId) vId = found.id;
             else
-              return res
-                .status(400)
-                .json({
-                  message: `SKU conflict with existing variant id=${found.id}`,
-                  sku: found.sku,
-                });
+              return res.status(400).json({
+                message: `SKU conflict with existing variant id=${found.id}`,
+                sku: found.sku,
+              });
           }
         }
 
@@ -490,5 +486,39 @@ exports.removeImage = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// List products by brand via query param ?brand= (brand id or slug/name)
+exports.listByBrand = async (req, res) => {
+  try {
+    const { brand } = req.query;
+    const where = {};
+    if (brand !== undefined && brand !== null && String(brand).trim() !== "") {
+      const b = String(brand).trim();
+      const asNum = Number(b);
+      if (!Number.isNaN(asNum) && String(asNum) === b) {
+        where.brandId = asNum;
+      } else {
+        // Match by brand slug or name if provided
+        where.OR = [{ brand: { slug: b } }, { brand: { name: b } }];
+      }
+    }
+
+    const products = await prisma.product.findMany({
+      where,
+      include: {
+        category: true,
+        subcategory: true,
+        subSubcategory: true,
+        brand: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    products.forEach((p) => (p.images = parseImagesField(p.images)));
+    res.json(products);
+  } catch (err) {
+    console.error("listByBrand error:", err && err.stack ? err.stack : err);
+    res.status(500).json({ message: "Server error" });
   }
 };
