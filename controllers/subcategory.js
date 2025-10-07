@@ -1,3 +1,4 @@
+// controllers/subcategory.js
 const prisma = require("../config/prisma");
 
 // รองรับ slug ภาษาไทย
@@ -21,6 +22,14 @@ exports.create = async (req, res) => {
       return res.status(400).json({ message: "กรุณาระบุชื่อและ categoryId" });
     }
 
+    // ตรวจสอบ categoryId ว่ามีอยู่จริงไหม
+    const categoryExists = await prisma.category.findUnique({
+      where: { id: Number(categoryId) },
+    });
+    if (!categoryExists) {
+      return res.status(400).json({ message: "Category ไม่ถูกต้อง" });
+    }
+
     const slug = slugify(name);
     const subcategory = await prisma.subcategory.create({
       data: {
@@ -35,7 +44,7 @@ exports.create = async (req, res) => {
     if (err.code === "P2002") {
       return res.status(400).json({ message: "ชื่อหรือ slug นี้ถูกใช้แล้ว" });
     }
-    console.error(err);
+    console.error("subcategory.create error:", err);
     res.status(500).json({ message: "เกิดข้อผิดพลาดของเซิร์ฟเวอร์" });
   }
 };
@@ -50,12 +59,36 @@ exports.list = async (req, res) => {
       if (isNaN(catIdNum)) {
         return res.status(400).json({ message: "categoryId ต้องเป็นตัวเลข" });
       }
+
+      // ตรวจสอบ categoryId ว่ามีอยู่จริงไหม
+      const categoryExists = await prisma.category.findUnique({
+        where: { id: catIdNum },
+      });
+      if (!categoryExists) {
+        return res.status(400).json({ message: "Category ไม่ถูกต้อง" });
+      }
+
       where.categoryId = catIdNum;
     }
-    const subcategories = await prisma.subcategory.findMany({
-      where,
-      include: { category: true, subsubcategories: true },
-    });
+
+    // ใช้ try/catch รอบ include subsubcategories ป้องกัน crash
+    let subcategories = [];
+    try {
+      subcategories = await prisma.subcategory.findMany({
+        where,
+        include: {
+          category: true,
+          subsubcategories: true,
+        },
+      });
+    } catch (err) {
+      console.error("Prisma include subsubcategories error:", err);
+      subcategories = await prisma.subcategory.findMany({
+        where,
+        include: { category: true }, // fallback: ไม่ include subsubcategories
+      });
+    }
+
     res.status(200).json(subcategories);
   } catch (err) {
     console.error(
@@ -63,12 +96,10 @@ exports.list = async (req, res) => {
       err && err.stack ? err.stack : err
     );
     if (process.env.NODE_ENV !== "production") {
-      return res
-        .status(500)
-        .json({
-          message: "เกิดข้อผิดพลาดของเซิร์ฟเวอร์",
-          error: err.message || String(err),
-        });
+      return res.status(500).json({
+        message: "เกิดข้อผิดพลาดของเซิร์ฟเวอร์",
+        error: err.message || String(err),
+      });
     }
     res.status(500).json({ message: "เกิดข้อผิดพลาดของเซิร์ฟเวอร์" });
   }
@@ -82,6 +113,14 @@ exports.update = async (req, res) => {
 
     if (!name || !categoryId) {
       return res.status(400).json({ message: "กรุณาระบุชื่อและ categoryId" });
+    }
+
+    // ตรวจสอบ categoryId ว่ามีอยู่จริงไหม
+    const categoryExists = await prisma.category.findUnique({
+      where: { id: Number(categoryId) },
+    });
+    if (!categoryExists) {
+      return res.status(400).json({ message: "Category ไม่ถูกต้อง" });
     }
 
     const slug = slugify(name);
@@ -99,7 +138,7 @@ exports.update = async (req, res) => {
     if (err.code === "P2002") {
       return res.status(400).json({ message: "ชื่อหรือ slug นี้ถูกใช้แล้ว" });
     }
-    console.error(err);
+    console.error("subcategory.update error:", err);
     res.status(500).json({ message: "เกิดข้อผิดพลาดของเซิร์ฟเวอร์" });
   }
 };
@@ -120,7 +159,7 @@ exports.remove = async (req, res) => {
     await prisma.subcategory.delete({ where: { id: Number(id) } });
     res.status(200).json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("subcategory.remove error:", err);
     if (err.code === "P2003") {
       return res
         .status(400)
