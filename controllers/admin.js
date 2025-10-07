@@ -1,5 +1,17 @@
 const prisma = require("../config/prisma");
-const stripe = require("stripe")(process.env.STRIPE_SECRET);
+let stripe = null;
+if (process.env.STRIPE_SECRET) {
+  try {
+    stripe = require("stripe")(process.env.STRIPE_SECRET);
+  } catch (e) {
+    console.warn("Stripe init failed:", e && e.message ? e.message : e);
+    stripe = null;
+  }
+} else {
+  console.info(
+    "Stripe not configured; STRIPE_SECRET is missing. Stripe calls will be skipped."
+  );
+}
 const bcrypt = require("bcryptjs");
 
 // แผนที่ภาษาไทย ↔ ENUM
@@ -230,6 +242,11 @@ exports.getOrdersAdmin = async (req, res) => {
     await Promise.allSettled(
       mappedOrders.map(async (mo) => {
         if (!mo || !mo.stripePaymentId) return;
+        if (!stripe) {
+          // Stripe not configured; skip retrieving payment intent
+          mo.paymentMethod = null;
+          return;
+        }
         try {
           const pi = await stripe.paymentIntents.retrieve(mo.stripePaymentId);
           const method = pi.payment_method_types?.[0] || null;

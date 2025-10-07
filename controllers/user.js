@@ -53,7 +53,22 @@ exports.returnOrder = async (req, res) => {
   }
 };
 const prisma = require("../config/prisma");
-const stripe = require("stripe")(process.env.STRIPE_SECRET);
+let stripe = null;
+if (process.env.STRIPE_SECRET) {
+  try {
+    stripe = require("stripe")(process.env.STRIPE_SECRET);
+  } catch (e) {
+    console.warn(
+      "Stripe init failed in user controller:",
+      e && e.message ? e.message : e
+    );
+    stripe = null;
+  }
+} else {
+  console.info(
+    "Stripe not configured; STRIPE_SECRET is missing. Stripe calls will be skipped in user controller."
+  );
+}
 const cloudinary = require("cloudinary").v2;
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

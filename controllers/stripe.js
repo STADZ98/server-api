@@ -1,5 +1,20 @@
 const prisma = require("../config/prisma");
-const stripe = require("stripe")(process.env.STRIPE_SECRET);
+let stripe = null;
+if (process.env.STRIPE_SECRET) {
+  try {
+    stripe = require("stripe")(process.env.STRIPE_SECRET);
+  } catch (e) {
+    console.warn(
+      "Stripe init failed in stripe controller:",
+      e && e.message ? e.message : e
+    );
+    stripe = null;
+  }
+} else {
+  console.info(
+    "Stripe not configured; STRIPE_SECRET is missing. Payment endpoints will return 500."
+  );
+}
 
 exports.payment = async (req, res) => {
   try {
@@ -36,6 +51,11 @@ exports.payment = async (req, res) => {
       requestedMethod && singleMethods.has(requestedMethod)
         ? [requestedMethod]
         : ["card", "promptpay"];
+
+    if (!stripe)
+      return res
+        .status(500)
+        .json({ message: "Stripe not configured on server" });
 
     // Create a PaymentIntent with the order amount and currency
     const paymentIntent = await stripe.paymentIntents.create({
