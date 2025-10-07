@@ -70,6 +70,34 @@ if (process.env.STRIPE_SECRET) {
   );
 }
 
+// Helper to build an absolute image URL from various image shapes (string or object)
+const buildImageUrl = (img, req) => {
+  if (!img) return null;
+  const url =
+    typeof img === "string"
+      ? img
+      : img.secure_url || img.url || img.src || null;
+  if (!url) return null;
+  if (/^(https?:)?\/\//i.test(url)) {
+    return url.startsWith("http://") ? url.replace("http://", "https://") : url;
+  }
+  const apiBase =
+    process.env.VITE_API ||
+    process.env.VITE_API_URL ||
+    process.env.SERVER_URL ||
+    "";
+  const base = apiBase
+    ? apiBase.replace(/\/api\/?$/i, "").replace(/\/$/, "")
+    : "";
+  if (base) return `${base}/${String(url).replace(/^\/+/, "")}`;
+  // fallback to request origin if available
+  if (req && req.protocol && req.get) {
+    const origin = `${req.protocol}://${req.get("host")}`.replace(/\/$/, "");
+    return `${origin}/${String(url).replace(/^\/+/, "")}`;
+  }
+  return url.startsWith("/") ? url : `/${String(url).replace(/^\/+/, "")}`;
+};
+
 // ✅ ดึงผู้ใช้ทั้งหมด
 exports.listUsers = async (req, res) => {
   try {
@@ -714,12 +742,12 @@ exports.getOrder = async (req, res) => {
                         category: prod.category
                           ? { id: prod.category.id, name: prod.category.name }
                           : null,
-                        image:
+                        image: buildImageUrl(
                           prodImgs && prodImgs.length
-                            ? prodImgs[0].secure_url ||
-                              prodImgs[0].url ||
-                              prodImgs[0]
-                            : null,
+                            ? prodImgs[0]
+                            : prod.image || prod.imageUrl || prod.img || null,
+                          req
+                        ),
                       }
                     : null,
                   variant: variant
@@ -728,12 +756,15 @@ exports.getOrder = async (req, res) => {
                         title: variant.title,
                         price: variant.price,
                         quantity: variant.quantity,
-                        image:
+                        image: buildImageUrl(
                           varImgs && varImgs.length
-                            ? varImgs[0].secure_url ||
-                              varImgs[0].url ||
-                              varImgs[0]
-                            : null,
+                            ? varImgs[0]
+                            : variant.image ||
+                                variant.imageUrl ||
+                                variant.img ||
+                                null,
+                          req
+                        ),
                       }
                     : null,
                 };
