@@ -700,6 +700,37 @@ exports.saveOrder = async (req, res) => {
               }
             }
 
+            // build primary image URLs and arrays for product and variant
+            const primaryProdImg = buildImageUrl(
+              prodImgs && prodImgs.length
+                ? prodImgs[0]
+                : prod?.image || prod?.imageUrl || prod?.img || null,
+              req
+            );
+            const prodImagesArray = (prodImgs && prodImgs.length
+              ? prodImgs.map((pi) => buildImageUrl(pi, req)).filter(Boolean)
+              : []
+            ).length
+              ? prodImgs.map((pi) => buildImageUrl(pi, req)).filter(Boolean)
+              : primaryProdImg
+              ? [primaryProdImg]
+              : [];
+
+            const primaryVarImg = buildImageUrl(
+              varImgs && varImgs.length
+                ? varImgs[0]
+                : variant?.image || variant?.imageUrl || variant?.img || null,
+              req
+            );
+            const varImagesArray = (varImgs && varImgs.length
+              ? varImgs.map((vi) => buildImageUrl(vi, req)).filter(Boolean)
+              : []
+            ).length
+              ? varImgs.map((vi) => buildImageUrl(vi, req)).filter(Boolean)
+              : primaryVarImg
+              ? [primaryVarImg]
+              : [];
+
             return {
               id: p.id,
               productId: p.productId,
@@ -713,12 +744,8 @@ exports.saveOrder = async (req, res) => {
                     category: prod.category
                       ? { id: prod.category.id, name: prod.category.name }
                       : null,
-                    image: buildImageUrl(
-                      prodImgs && prodImgs.length
-                        ? prodImgs[0]
-                        : prod.image || prod.imageUrl || prod.img || null,
-                      req
-                    ),
+                    image: primaryProdImg,
+                    images: prodImagesArray,
                   }
                 : null,
               variant: variant
@@ -727,15 +754,8 @@ exports.saveOrder = async (req, res) => {
                     title: variant.title,
                     price: variant.price,
                     quantity: variant.quantity,
-                    image: buildImageUrl(
-                      varImgs && varImgs.length
-                        ? varImgs[0]
-                        : variant.image ||
-                            variant.imageUrl ||
-                            variant.img ||
-                            null,
-                      req
-                    ),
+                    image: primaryVarImg,
+                    images: varImagesArray,
                   }
                 : null,
             };
