@@ -279,7 +279,7 @@ exports.getUserCart = async (req, res) => {
       },
     });
 
-    // parse images JSON stored on product and variant rows
+    // parse images JSON stored on product and variant rows and normalize image URLs
     const parsedProducts = (cart?.products || []).map((p) => {
       const prod = p.product || null;
       const variant = p.variant || null;
@@ -305,7 +305,24 @@ exports.getUserCart = async (req, res) => {
           variant.images = [];
         }
       }
-      return { ...p, product: prod, variant };
+      // attach convenient normalized image fields
+      const productImage = buildImageUrl(
+        prod && prod.images && prod.images.length
+          ? prod.images[0]
+          : prod?.image || null,
+        req
+      );
+      const variantImage = buildImageUrl(
+        variant && variant.images && variant.images.length
+          ? variant.images[0]
+          : variant?.image || null,
+        req
+      );
+      const prodWithImage = prod ? { ...prod, image: productImage } : null;
+      const variantWithImage = variant
+        ? { ...variant, image: variantImage }
+        : null;
+      return { ...p, product: prodWithImage, variant: variantWithImage };
     });
 
     res.json({ products: parsedProducts, cartTotal: cart?.cartTotal || 0 });

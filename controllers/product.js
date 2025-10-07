@@ -1,6 +1,33 @@
 require("dotenv").config();
 const prisma = require("../config/prisma");
 
+// Helper to build absolute URL for images
+const buildImageUrl = (img, req) => {
+  if (!img) return null;
+  const url =
+    typeof img === "string"
+      ? img
+      : img.secure_url || img.url || img.src || null;
+  if (!url) return null;
+  if (/^(https?:)?\/\//i.test(url)) {
+    return url.startsWith("http://") ? url.replace("http://", "https://") : url;
+  }
+  const apiBase =
+    process.env.VITE_API ||
+    process.env.VITE_API_URL ||
+    process.env.SERVER_URL ||
+    "";
+  const base = apiBase
+    ? apiBase.replace(/\/api\/?$/i, "").replace(/\/$/, "")
+    : "";
+  if (base) return `${base}/${String(url).replace(/^\/+/, "")}`;
+  if (req && req.protocol && req.get) {
+    const origin = `${req.protocol}://${req.get("host")}`.replace(/\/$/, "");
+    return `${origin}/${String(url).replace(/^\/+/, "")}`;
+  }
+  return url.startsWith("/") ? url : `/${String(url).replace(/^\/+/, "")}`;
+};
+
 // Helper to safely parse images JSON
 function parseImagesField(field) {
   if (!field) return [];
@@ -139,7 +166,19 @@ exports.list = async (req, res) => {
         brand: true,
       },
     });
-    products.forEach((p) => (p.images = parseImagesField(p.images)));
+    products.forEach((p) => {
+      p.images = parseImagesField(p.images);
+      // normalize first image to absolute url for convenience
+      p.image = buildImageUrl(
+        p.images && p.images.length ? p.images[0] : p.image || null,
+        req
+      );
+      if (Array.isArray(p.variants))
+        p.variants = p.variants.map((v) => ({
+          ...v,
+          images: parseImagesField(v.images),
+        }));
+    });
     res.json(products);
   } catch (err) {
     console.error("list error:", err && err.stack ? err.stack : err);
@@ -169,6 +208,21 @@ exports.read = async (req, res) => {
     product.images = parseImagesField(product.images);
     if (Array.isArray(product.variants))
       product.variants.forEach((v) => (v.images = parseImagesField(v.images)));
+    // attach convenient absolute url for first image
+    product.image = buildImageUrl(
+      product.images && product.images.length
+        ? product.images[0]
+        : product.image || null,
+      req
+    );
+    if (Array.isArray(product.variants))
+      product.variants = product.variants.map((v) => ({
+        ...v,
+        image: buildImageUrl(
+          v.images && v.images.length ? v.images[0] : v.image || null,
+          req
+        ),
+      }));
     res.json(product);
   } catch (err) {
     console.error(err);
