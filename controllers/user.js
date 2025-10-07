@@ -250,17 +250,43 @@ exports.getUserCart = async (req, res) => {
       include: {
         products: {
           include: {
-            product: { include: { images: true } },
-            variant: { include: { images: true } },
+            product: { include: { category: true } },
+            variant: { include: {} },
           },
         },
       },
     });
 
-    res.json({
-      products: cart?.products || [],
-      cartTotal: cart?.cartTotal || 0,
+    // parse images JSON stored on product and variant rows
+    const parsedProducts = (cart?.products || []).map((p) => {
+      const prod = p.product || null;
+      const variant = p.variant || null;
+      if (prod) {
+        try {
+          prod.images = Array.isArray(prod.images)
+            ? prod.images
+            : prod.images
+            ? JSON.parse(prod.images)
+            : [];
+        } catch (e) {
+          prod.images = [];
+        }
+      }
+      if (variant) {
+        try {
+          variant.images = Array.isArray(variant.images)
+            ? variant.images
+            : variant.images
+            ? JSON.parse(variant.images)
+            : [];
+        } catch (e) {
+          variant.images = [];
+        }
+      }
+      return { ...p, product: prod, variant };
     });
+
+    res.json({ products: parsedProducts, cartTotal: cart?.cartTotal || 0 });
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Server Error" });
@@ -445,8 +471,8 @@ exports.saveOrder = async (req, res) => {
       include: {
         products: {
           include: {
-            product: { include: { images: true, category: true } },
-            variant: { include: { images: true } },
+            product: { include: { category: true } },
+            variant: { include: {} },
           },
         },
         address: true,
@@ -614,8 +640,8 @@ exports.getOrder = async (req, res) => {
       include: {
         products: {
           include: {
-            product: { include: { category: true, images: true } },
-            variant: { include: { images: true } },
+            product: { include: { category: true } },
+            variant: { include: {} },
           },
         },
         address: true,
@@ -659,43 +685,67 @@ exports.getOrder = async (req, res) => {
           name: o.address?.name || o.orderedBy?.name || null,
           email: o.orderedBy?.email || null,
           products: Array.isArray(o.products)
-            ? o.products.map((p) => ({
-                id: p.id,
-                productId: p.productId,
-                variantId: p.variantId || null,
-                count: p.count,
-                price: p.price,
-                product: p.product
-                  ? {
-                      id: p.product.id,
-                      title: p.product.title,
-                      category: p.product.category
-                        ? {
-                            id: p.product.category.id,
-                            name: p.product.category.name,
-                          }
-                        : null,
-                      image:
-                        Array.isArray(p.product.images) &&
-                        p.product.images.length > 0
-                          ? p.product.images[0].url || p.product.images[0]
+            ? o.products.map((p) => {
+                const prod = p.product || null;
+                const variant = p.variant || null;
+                let prodImgs = [];
+                let varImgs = [];
+                if (prod) {
+                  try {
+                    prodImgs = Array.isArray(prod.images)
+                      ? prod.images
+                      : prod.images
+                      ? JSON.parse(prod.images)
+                      : [];
+                  } catch (e) {
+                    prodImgs = [];
+                  }
+                }
+                if (variant) {
+                  try {
+                    varImgs = Array.isArray(variant.images)
+                      ? variant.images
+                      : variant.images
+                      ? JSON.parse(variant.images)
+                      : [];
+                  } catch (e) {
+                    varImgs = [];
+                  }
+                }
+
+                return {
+                  id: p.id,
+                  productId: p.productId,
+                  variantId: p.variantId || null,
+                  count: p.count,
+                  price: p.price,
+                  product: prod
+                    ? {
+                        id: prod.id,
+                        title: prod.title,
+                        category: prod.category
+                          ? { id: prod.category.id, name: prod.category.name }
                           : null,
-                    }
-                  : null,
-                variant: p.variant
-                  ? {
-                      id: p.variant.id,
-                      title: p.variant.title,
-                      price: p.variant.price,
-                      quantity: p.variant.quantity,
-                      image:
-                        Array.isArray(p.variant.images) &&
-                        p.variant.images.length > 0
-                          ? p.variant.images[0].url || p.variant.images[0]
-                          : null,
-                    }
-                  : null,
-              }))
+                        image:
+                          prodImgs && prodImgs.length
+                            ? prodImgs[0].url || prodImgs[0]
+                            : null,
+                      }
+                    : null,
+                  variant: variant
+                    ? {
+                        id: variant.id,
+                        title: variant.title,
+                        price: variant.price,
+                        quantity: variant.quantity,
+                        image:
+                          varImgs && varImgs.length
+                            ? varImgs[0].url || varImgs[0]
+                            : null,
+                      }
+                    : null,
+                };
+              })
             : [],
           // include shipping/tracking fields so frontend can render them
           trackingCarrier: o.trackingCarrier || null,

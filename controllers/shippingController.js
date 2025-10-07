@@ -261,8 +261,8 @@ async function lookupOrderByTracking(req, res) {
         orderedBy: true,
         products: {
           include: {
-            product: { include: { images: true } },
-            variant: { include: { images: true } },
+            product: { include: { category: true } },
+            variant: { include: {} },
           },
         },
       },
@@ -304,6 +304,35 @@ async function lookupOrderByTracking(req, res) {
       }
     }
 
+    // parse images stored as JSON on product/variant rows
+    const parsedProducts = (order.products || []).map((p) => {
+      const prod = p.product || null;
+      const variant = p.variant || null;
+      if (prod) {
+        try {
+          prod.images = Array.isArray(prod.images)
+            ? prod.images
+            : prod.images
+            ? JSON.parse(prod.images)
+            : [];
+        } catch (e) {
+          prod.images = [];
+        }
+      }
+      if (variant) {
+        try {
+          variant.images = Array.isArray(variant.images)
+            ? variant.images
+            : variant.images
+            ? JSON.parse(variant.images)
+            : [];
+        } catch (e) {
+          variant.images = [];
+        }
+      }
+      return { ...p, product: prod, variant };
+    });
+
     const summary = {
       id: order.id,
       createdAt: order.createdAt,
@@ -314,7 +343,7 @@ async function lookupOrderByTracking(req, res) {
       address: order.address || null,
       orderedBy: order.orderedBy || null,
       // include products (with included product & variant) so callers can render items
-      products: order.products || [],
+      products: parsedProducts,
     };
 
     return res.json({ ok: true, order: summary, events: trackingEvents });
