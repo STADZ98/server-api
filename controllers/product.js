@@ -764,7 +764,6 @@ exports.searchfilters = async (req, res) => {
 };
 
 // อัปโหลดรูปภาพขึ้น Cloudinary
-
 exports.createImages = async (req, res) => {
   try {
     const imageBase64 = req.body.image || req.body;
@@ -774,19 +773,18 @@ exports.createImages = async (req, res) => {
       resource_type: "auto",
     });
 
-    // ใช้เฉพาะ secure_url (https) เพื่อป้องกัน Mixed Content
     res.json({
       asset_id: result.asset_id,
       public_id: result.public_id,
-      url: result.secure_url,        // ✅ บังคับใช้ https
-      secure_url: result.secure_url, // ✅ สำรองไว้
+      url: result.url,
+      secure_url: result.secure_url,
     });
   } catch (err) {
     console.error("Cloudinary upload error:", err.message, err);
+
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
-
 
 // ลบรูปภาพจาก Cloudinary
 exports.removeImage = async (req, res) => {
