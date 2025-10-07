@@ -565,10 +565,6 @@ exports.saveOrder = async (req, res) => {
         }
 
         if (detected) {
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { paymentMethod: detected },
-          });
           order.paymentMethod = detected;
         }
       }
@@ -579,8 +575,6 @@ exports.saveOrder = async (req, res) => {
         err?.message || err
       );
     }
-
-    // console.log("Order created:", { orderId: order.id, userId });
 
     // Update stock: decrement variant quantity if variantId present, else decrement product
     const updatePromises = userCart.products.map((item) => {
