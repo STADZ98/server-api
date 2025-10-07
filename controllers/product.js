@@ -670,27 +670,6 @@ exports.listBySubcategory = async (req, res) => {
 
 exports.listby = async (req, res) => {
   try {
-    // Log incoming request context to help debug unexpected GETs/500s
-    try {
-      const info = {
-        ip: req.ip || req.connection?.remoteAddress || null,
-        method: req.method,
-        path: req.originalUrl || req.url,
-        headers: {
-          host: req.get("host"),
-          referer: req.get("referer") || req.get("referrer"),
-          "user-agent": req.get("user-agent"),
-          authorization: req.get("authorization") ? "<present>" : "<missing>",
-        },
-        body: req.body,
-      };
-      console.info("product.listby request:", info);
-    } catch (e) {
-      console.error(
-        "Failed to log request info in product.listby:",
-        e && e.stack ? e.stack : e
-      );
-    }
     // ตัวอย่างโค้ด สำหรับดึงสินค้าตามเงื่อนไขง่ายๆ
     const allowedSortFields = [
       "id",
