@@ -12,6 +12,8 @@ const buildImageUrl = (img, req) => {
   if (/^(https?:)?\/\//i.test(url)) {
     return url.startsWith("http://") ? url.replace("http://", "https://") : url;
   }
+  // If it's a data URL or blob URL (base64 embedded), return as-is — do not prepend server/API base
+  if (/^data:/i.test(url) || /^blob:/i.test(url)) return url;
   const apiBase =
     process.env.VITE_API ||
     process.env.VITE_API_URL ||
