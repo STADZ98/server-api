@@ -78,6 +78,22 @@ exports.createReview = async (req, res) => {
       },
     });
 
+    // If an image was uploaded via multipart (multer -> req.file), save it to ReviewImage
+    if (req.file && req.file.buffer) {
+      try {
+        await prisma.reviewImage.create({
+          data: {
+            reviewId: review.id,
+            filename: req.file.originalname,
+            mime: req.file.mimetype,
+            data: req.file.buffer,
+          },
+        });
+      } catch (e) {
+        console.error("Failed to save review image:", e);
+      }
+    }
+
     res.status(201).json({ review });
   } catch (err) {
     console.error("Create review error:", err);
@@ -153,6 +169,9 @@ exports.getReviewsByProduct = async (req, res) => {
         user: { select: { id: true, email: true, picture: true } },
         variant: true,
         replyBy: { select: { id: true, email: true } },
+        images: {
+          select: { id: true, filename: true, mime: true, createdAt: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -189,6 +208,23 @@ exports.updateReview = async (req, res) => {
       where: { id },
       data: { rating: ratingInt, comment },
     });
+
+    // If there's an uploaded file, create a ReviewImage entry (or replace existing)
+    if (req.file && req.file.buffer) {
+      try {
+        // Optionally, delete old images for this review or keep multiple; here we keep multiple
+        await prisma.reviewImage.create({
+          data: {
+            reviewId: updated.id,
+            filename: req.file.originalname,
+            mime: req.file.mimetype,
+            data: req.file.buffer,
+          },
+        });
+      } catch (e) {
+        console.error("Failed to save updated review image:", e);
+      }
+    }
 
     res.json({ success: true, updated });
   } catch (err) {
@@ -269,6 +305,25 @@ exports.deleteReply = async (req, res) => {
     res.json({ success: true, review: updated });
   } catch (err) {
     console.error("Delete reply error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Serve review image binary by image id
+exports.getReviewImage = async (req, res) => {
+  try {
+    const { imageId } = req.params;
+    const id = Number(imageId);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid imageId" });
+
+    const img = await prisma.reviewImage.findUnique({ where: { id } });
+    if (!img) return res.status(404).json({ error: "Image not found" });
+
+    res.setHeader("Content-Type", img.mime || "application/octet-stream");
+    res.setHeader("Content-Length", img.data.length);
+    res.send(img.data);
+  } catch (err) {
+    console.error("Get review image error:", err);
     res.status(500).json({ error: err.message });
   }
 };

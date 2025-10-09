@@ -2,13 +2,32 @@ const express = require("express");
 const router = express.Router();
 const reviewController = require("../controllers/reviewController");
 const { authCheck, adminCheck } = require("../middlewares/authCheck");
+const multer = require("multer");
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+});
 
 // Public
 router.get("/:productId", reviewController.getReviewsByProduct);
 
+// Serve stored review images
+router.get("/image/:imageId", reviewController.getReviewImage);
+
 // Review CRUD (user authenticated)
-router.post("/", authCheck, reviewController.createReview);
-router.put("/:reviewId", authCheck, reviewController.updateReview);
+// Accept optional single image field named 'image'
+router.post(
+  "/",
+  authCheck,
+  upload.single("image"),
+  reviewController.createReview
+);
+router.put(
+  "/:reviewId",
+  authCheck,
+  upload.single("image"),
+  reviewController.updateReview
+);
 router.delete("/:reviewId", authCheck, reviewController.deleteReview);
 
 // Admin replies to a review

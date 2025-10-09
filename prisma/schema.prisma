@@ -260,7 +260,19 @@ model Review {
   order     Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
   variantId Int?
   variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  // Attached images stored in DB
+  images    ReviewImage[]
   createdAt DateTime        @default(now())
+}
+
+model ReviewImage {
+  id        Int      @id @default(autoincrement())
+  reviewId  Int
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  filename  String?
+  mime      String
+  data      Bytes
+  createdAt DateTime @default(now())
 }
 
 model Address {
