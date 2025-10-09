@@ -178,7 +178,21 @@ exports.getReviewsByProduct = async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
-    res.json({ reviews });
+    // Map reviews to ensure consumer-friendly avatar field is present
+    const mapped = reviews.map((r) => {
+      const user = r.user || {};
+      // prefer stored user.picture (could be base64 data URL or URL); expose as `avatar`
+      const avatar = user.picture || null;
+      return {
+        ...r,
+        user: {
+          ...user,
+          avatar,
+        },
+      };
+    });
+
+    res.json({ reviews: mapped });
   } catch (err) {
     console.error("Get reviews error:", err);
     res.status(400).json({ error: err.message });
