@@ -121,9 +121,16 @@ exports.getReviewsByProduct = async (req, res) => {
   try {
     let { productId } = req.params;
     const { variantId, orderId } = req.query;
+    console.debug(
+      `GetReviewsByProduct called with params=%o query=%o`,
+      req.params,
+      req.query
+    );
     const productIdInt = parseInt(productId, 10);
     if (isNaN(productIdInt)) {
-      return res.status(400).json({ error: "Invalid productId" });
+      return res
+        .status(400)
+        .json({ error: "Invalid productId", received: productId });
     }
 
     const where = { productId: productIdInt };
