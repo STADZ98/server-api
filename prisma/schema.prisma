@@ -39,10 +39,12 @@ model User {
   carts     Cart[]    @relation("UserCarts")
   addresses Address[]
 
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  reviews       Review[]
-  ReturnRequest ReturnRequest[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  reviews        Review[]
+  // Reviews the user replied to (admin replies)
+  repliedReviews Review[]        @relation("ReviewReply")
+  ReturnRequest  ReturnRequest[]
 }
 
 model Category {
@@ -249,6 +251,11 @@ model Review {
   user      User            @relation(fields: [userId], references: [id])
   rating    Int
   comment   String
+  // Admin reply fields
+  reply     String?
+  replyById Int?
+  replyBy   User?           @relation("ReviewReply", fields: [replyById], references: [id], onDelete: SetNull)
+  repliedAt DateTime?
   orderId   Int?
   order     Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
   variantId Int?

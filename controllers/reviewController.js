@@ -142,13 +142,9 @@ exports.getReviewsByProduct = async (req, res) => {
     const reviews = await prisma.review.findMany({
       where,
       include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-          },
-        },
+        user: { select: { id: true, name: true, email: true } },
         variant: true,
+        replyBy: { select: { id: true, email: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -190,5 +186,81 @@ exports.updateReview = async (req, res) => {
   } catch (err) {
     console.error("Update review error:", err);
     res.status(400).json({ error: err.message });
+  }
+};
+
+// ✅ ตอบกลับรีวิว (โดย admin)
+exports.replyToReview = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    const { reply } = req.body;
+    const adminId = req.user.id;
+
+    if (!reply) return res.status(400).json({ error: "Reply text required" });
+
+    const id = Number(reviewId);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid reviewId" });
+
+    const review = await prisma.review.findUnique({ where: { id } });
+    if (!review) return res.status(404).json({ error: "Review not found" });
+
+    const updated = await prisma.review.update({
+      where: { id },
+      data: { reply, replyById: Number(adminId), repliedAt: new Date() },
+    });
+
+    res.json({ success: true, review: updated });
+  } catch (err) {
+    console.error("Reply to review error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ✅ แก้ไขการตอบกลับ (โดย admin)
+exports.updateReply = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    const { reply } = req.body;
+    const adminId = req.user.id;
+
+    if (!reply) return res.status(400).json({ error: "Reply text required" });
+
+    const id = Number(reviewId);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid reviewId" });
+
+    const review = await prisma.review.findUnique({ where: { id } });
+    if (!review) return res.status(404).json({ error: "Review not found" });
+
+    const updated = await prisma.review.update({
+      where: { id },
+      data: { reply, replyById: Number(adminId), repliedAt: new Date() },
+    });
+
+    res.json({ success: true, review: updated });
+  } catch (err) {
+    console.error("Update reply error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ✅ ลบการตอบกลับ (โดย admin)
+exports.deleteReply = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    const id = Number(reviewId);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid reviewId" });
+
+    const review = await prisma.review.findUnique({ where: { id } });
+    if (!review) return res.status(404).json({ error: "Review not found" });
+
+    const updated = await prisma.review.update({
+      where: { id },
+      data: { reply: null, replyById: null, repliedAt: null },
+    });
+
+    res.json({ success: true, review: updated });
+  } catch (err) {
+    console.error("Delete reply error:", err);
+    res.status(500).json({ error: err.message });
   }
 };
