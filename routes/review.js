@@ -15,17 +15,17 @@ router.get("/:productId", reviewController.getReviewsByProduct);
 router.get("/image/:imageId", reviewController.getReviewImage);
 
 // Review CRUD (user authenticated)
-// Accept optional single image field named 'image'
+// Accept multiple images in field named 'images' (up to 5 files)
 router.post(
   "/",
   authCheck,
-  upload.single("image"),
+  upload.array("images", 5),
   reviewController.createReview
 );
 router.put(
   "/:reviewId",
   authCheck,
-  upload.single("image"),
+  upload.array("images", 5),
   reviewController.updateReview
 );
 router.delete("/:reviewId", authCheck, reviewController.deleteReview);

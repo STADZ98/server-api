@@ -78,19 +78,21 @@ exports.createReview = async (req, res) => {
       },
     });
 
-    // If an image was uploaded via multipart (multer -> req.file), save it to ReviewImage
-    if (req.file && req.file.buffer) {
+    // If images were uploaded via multipart (multer -> req.files array), save them to ReviewImage
+    if (Array.isArray(req.files) && req.files.length > 0) {
       try {
-        await prisma.reviewImage.create({
-          data: {
-            reviewId: review.id,
-            filename: req.file.originalname,
-            mime: req.file.mimetype,
-            data: req.file.buffer,
-          },
-        });
+        const creates = req.files.map((f) => ({
+          reviewId: review.id,
+          filename: f.originalname,
+          mime: f.mimetype,
+          data: f.buffer,
+        }));
+        // bulk create entries
+        for (const c of creates) {
+          await prisma.reviewImage.create({ data: c });
+        }
       } catch (e) {
-        console.error("Failed to save review image:", e);
+        console.error("Failed to save review images:", e);
       }
     }
 
@@ -209,20 +211,46 @@ exports.updateReview = async (req, res) => {
       data: { rating: ratingInt, comment },
     });
 
-    // If there's an uploaded file, create a ReviewImage entry (or replace existing)
-    if (req.file && req.file.buffer) {
-      try {
-        // Optionally, delete old images for this review or keep multiple; here we keep multiple
-        await prisma.reviewImage.create({
-          data: {
-            reviewId: updated.id,
-            filename: req.file.originalname,
-            mime: req.file.mimetype,
-            data: req.file.buffer,
-          },
+    // Handle deletion of existing images (client can pass deleteImageIds[]=1&deleteImageIds[]=2)
+    try {
+      const deleteIds = [];
+      if (req.body.deleteImageIds) {
+        if (Array.isArray(req.body.deleteImageIds)) {
+          deleteIds.push(
+            ...req.body.deleteImageIds
+              .map((v) => Number(v))
+              .filter((n) => !isNaN(n))
+          );
+        } else if (typeof req.body.deleteImageIds === "string") {
+          // single value
+          const n = Number(req.body.deleteImageIds);
+          if (!isNaN(n)) deleteIds.push(n);
+        }
+      }
+      if (deleteIds.length > 0) {
+        await prisma.reviewImage.deleteMany({
+          where: { id: { in: deleteIds }, reviewId: updated.id },
         });
+      }
+    } catch (e) {
+      console.error("Failed to delete review images:", e);
+    }
+
+    // If there are uploaded files (req.files), create ReviewImage entries
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      try {
+        for (const f of req.files) {
+          await prisma.reviewImage.create({
+            data: {
+              reviewId: updated.id,
+              filename: f.originalname,
+              mime: f.mimetype,
+              data: f.buffer,
+            },
+          });
+        }
       } catch (e) {
-        console.error("Failed to save updated review image:", e);
+        console.error("Failed to save updated review images:", e);
       }
     }
 
