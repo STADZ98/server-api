@@ -149,7 +149,8 @@ exports.getReviewsByProduct = async (req, res) => {
     const reviews = await prisma.review.findMany({
       where,
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        // User model doesn't have `name` field in Prisma schema; select valid fields
+        user: { select: { id: true, email: true, picture: true } },
         variant: true,
         replyBy: { select: { id: true, email: true } },
       },
