@@ -83,7 +83,7 @@ router.get("/:productId", async (req, res) => {
     const reviews = await prisma.review.findMany({
       where,
       include: {
-        user: { select: { id: true, name: true } },
+        user: { select: { id: true, email: true, picture: true } },
         variant: true,
       },
       orderBy: { createdAt: "desc" },
