@@ -103,15 +103,31 @@ exports.update = async (req, res) => {
 exports.remove = async (req, res) => {
   try {
     const { id } = req.params;
+    const parsedId = Number(id);
+    if (!parsedId || Number.isNaN(parsedId) || parsedId <= 0) {
+      return res.status(400).json({ message: "id ไม่ถูกต้อง" });
+    }
+
+    // Check existence
     const found = await prisma.subSubcategory.findUnique({
-      where: { id: Number(id) },
+      where: { id: parsedId },
+      include: { products: true },
     });
     if (!found) {
       return res
         .status(404)
         .json({ message: "ไม่พบหมวดหมู่ย่อยระดับ 2 ที่ต้องการลบ" });
     }
-    await prisma.subSubcategory.delete({ where: { id: Number(id) } });
+
+    // If there are related products, return 400 with clear message instead of letting Prisma raise FK error
+    if (found.products && found.products.length > 0) {
+      return res.status(400).json({
+        message:
+          "ไม่สามารถลบได้ เนื่องจากมีสินค้าที่สัมพันธ์กับหมวดหมู่ย่อยระดับ 2 นี้ กรุณาลบหรือย้ายสินค้าที่เกี่ยวข้องก่อน",
+      });
+    }
+
+    await prisma.subSubcategory.delete({ where: { id: parsedId } });
     res.status(200).json({ success: true });
   } catch (err) {
     console.error(err);
