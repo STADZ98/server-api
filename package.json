@@ -5,7 +5,7 @@
   "scripts": {
     "test": "vitest run",
     "test:ui": "vitest --ui",
-    "start": "nodemon server",
+  "start": "nodemon dev-server.js",
     "postinstall": "prisma generate"
   },
   "keywords": [],

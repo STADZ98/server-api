@@ -164,10 +164,18 @@ exports.listby = async (req, res) => {
       },
     });
 
-    res.json(products);
+    // Ensure we send an array (prisma returns array on success)
+    res.json(Array.isArray(products) ? products : []);
   } catch (err) {
-    console.error("🔥 listby error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("🔥 listby error:", err && err.stack ? err.stack : err);
+    console.error("Request body:", req.body);
+    if (process.env.NODE_ENV !== "production") {
+      return res
+        .status(500)
+        .json({ message: "Server error", error: err.message || String(err) });
+    }
+    // Defensive response shape for clients
+    res.status(500).json({ message: "Server error", data: [] });
   }
 };
 
