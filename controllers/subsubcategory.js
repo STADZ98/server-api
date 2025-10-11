@@ -119,11 +119,22 @@ exports.remove = async (req, res) => {
         .json({ message: "ไม่พบหมวดหมู่ย่อยระดับ 2 ที่ต้องการลบ" });
     }
 
-    // If there are related products, return 400 with clear message instead of letting Prisma raise FK error
-    if (found.products && found.products.length > 0) {
+    // If there are related products, either block with details or disassociate then delete if force=true
+    const force = String(req.query.force) === "true";
+    const relatedCount = found.products ? found.products.length : 0;
+    if (relatedCount > 0 && !force) {
       return res.status(400).json({
         message:
-          "ไม่สามารถลบได้ เนื่องจากมีสินค้าที่สัมพันธ์กับหมวดหมู่ย่อยระดับ 2 นี้ กรุณาลบหรือย้ายสินค้าที่เกี่ยวข้องก่อน",
+          "ไม่สามารถลบได้ เนื่องจากมีสินค้าที่สัมพันธ์กับหมวดหมู่ย่อยระดับ 2 นี้",
+        relatedCount,
+      });
+    }
+
+    if (relatedCount > 0 && force) {
+      // Disassociate products by clearing subSubcategoryId
+      await prisma.product.updateMany({
+        where: { subSubcategoryId: parsedId },
+        data: { subSubcategoryId: null },
       });
     }
 

@@ -148,15 +148,53 @@ exports.remove = async (req, res) => {
   try {
     const { id } = req.params;
 
+    const parsedId = Number(id);
+    if (!parsedId || Number.isNaN(parsedId) || parsedId <= 0) {
+      return res.status(400).json({ message: "id ไม่ถูกต้อง" });
+    }
+
     const found = await prisma.subcategory.findUnique({
-      where: { id: Number(id) },
+      where: { id: parsedId },
+      include: { subsubcategories: true, products: true },
     });
 
     if (!found) {
       return res.status(404).json({ message: "ไม่พบหมวดหมู่ย่อยนี้" });
     }
 
-    await prisma.subcategory.delete({ where: { id: Number(id) } });
+    const force = String(req.query.force) === "true";
+    const relatedSubSubCount = found.subsubcategories
+      ? found.subsubcategories.length
+      : 0;
+    const relatedProductCount = found.products ? found.products.length : 0;
+    const relatedCount = relatedSubSubCount + relatedProductCount;
+
+    if (relatedCount > 0 && !force) {
+      return res.status(400).json({
+        message: "ไม่สามารถลบได้ เนื่องจากมีข้อมูลที่เกี่ยวข้อง",
+        relatedSubSubCount,
+        relatedProductCount,
+      });
+    }
+
+    if (force) {
+      // Disassociate products' subcategory and subsubcategories' parent before delete
+      if (relatedProductCount > 0) {
+        await prisma.product.updateMany({
+          where: { subcategoryId: parsedId },
+          data: { subcategoryId: null },
+        });
+      }
+      if (relatedSubSubCount > 0) {
+        // Option: disassociate subsubcategories by setting subcategoryId to null is not allowed (relation required)
+        // Instead, delete subsubcategories (cascade might be desired) — here we delete subsubcategories explicitly
+        await prisma.subSubcategory.deleteMany({
+          where: { subcategoryId: parsedId },
+        });
+      }
+    }
+
+    await prisma.subcategory.delete({ where: { id: parsedId } });
     res.status(200).json({ success: true });
   } catch (err) {
     console.error("subcategory.remove error:", err);
