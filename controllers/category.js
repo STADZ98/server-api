@@ -58,8 +58,22 @@ exports.create = async (req, res) => {
 // ดึงรายการทั้งหมด
 exports.list = async (req, res) => {
   try {
-    const categories = await prisma.category.findMany();
-    res.send(categories);
+    // Return categories with product counts to avoid fetching all products on the client
+    const categories = await prisma.category.findMany({
+      include: {
+        _count: {
+          select: { products: true },
+        },
+      },
+    });
+
+    // Normalize response: attach `productCount` for convenience and remove _count
+    const normalized = categories.map((c) => ({
+      ...c,
+      productCount: c._count?.products || 0,
+      _count: undefined,
+    }));
+    res.send(normalized);
   } catch (err) {
     console.error("category.list error:", err && err.stack ? err.stack : err);
     if (process.env.NODE_ENV !== "production") {

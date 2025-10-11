@@ -477,13 +477,20 @@ exports.listby = async (req, res) => {
     order = allowedOrder.includes(String(order).toLowerCase())
       ? String(order).toLowerCase()
       : "desc";
+    // For shop listing, return a lightweight projection to reduce payload size
     let findManyArgs = {
       orderBy: { [sort]: order },
-      include: {
-        category: true,
-        subcategory: true,
-        subSubcategory: true,
-        brand: true,
+      select: {
+        id: true,
+        title: true,
+        price: true,
+        quantity: true,
+        createdAt: true,
+        category: { select: { id: true, name: true } },
+        subcategory: { select: { id: true, name: true } },
+        subSubcategory: { select: { id: true, name: true } },
+        brand: { select: { id: true, name: true } },
+        images: true,
       },
     };
     console.log("product.listby prisma args:", findManyArgs);
@@ -497,13 +504,35 @@ exports.listby = async (req, res) => {
     )
       findManyArgs.take = parseInt(limit);
     const products = await prisma.product.findMany(findManyArgs);
-    products.forEach((p) => (p.images = parseImagesField(p.images)));
-    res.json(products);
+
+    // Map images and expose a convenient `image` (first image absolute URL) to the client
+    const mapped = products.map((p) => {
+      const imgs = parseImagesField(p.images || "");
+      const image = buildImageUrl(imgs && imgs.length ? imgs[0] : null, req);
+      return {
+        id: p.id,
+        title: p.title,
+        price: p.price,
+        quantity: p.quantity,
+        createdAt: p.createdAt,
+        category: p.category || null,
+        subcategory: p.subcategory || null,
+        subSubcategory: p.subSubcategory || null,
+        brand: p.brand || null,
+        image,
+        // keep raw images only if small number; do not send heavy payloads by default
+        images: imgs && imgs.length ? imgs : [],
+      };
+    });
+
+    res.json(mapped);
   } catch (err) {
     console.error("product.listby error:", err && err.stack ? err.stack : err);
     // In development, return the original error message to help debugging.
     if (process.env.NODE_ENV !== "production") {
-      return res.status(500).json({ message: "Server error", error: err.message || String(err) });
+      return res
+        .status(500)
+        .json({ message: "Server error", error: err.message || String(err) });
     }
     res.status(500).json({ message: "Server error" });
   }
