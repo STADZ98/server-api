@@ -7,20 +7,8 @@ const isProd = process.env.NODE_ENV === "production";
 
 let prisma;
 
-if (isProd) {
-  // Production: ต่อฐานข้อมูลจริง
-  prisma = new PrismaClient();
-  prisma
-    .$connect()
-    .then(() => console.log("Prisma: successfully connected to database"))
-    .catch((err) => {
-      console.error(
-        "Prisma: unable to connect to database!",
-        err.message || err
-      );
-    });
-} else {
-  // Local dev: mock data fallback
+// helper to create a mock prisma object used for local dev or fallback
+function createMockPrisma() {
   const makeModelMock = (name) => {
     const samples = {
       category: [
@@ -110,13 +98,12 @@ if (isProd) {
     productOnOrder: makeModelMock("productOnOrder"),
     productOnCart: makeModelMock("productOnCart"),
     productVariant: makeModelMock("productVariant"),
-    // image and variantImage models removed; images are stored as JSON on product/productVariant
     review: makeModelMock("review"),
     address: makeModelMock("address"),
     user: makeModelMock("user"),
   };
 
-  prisma = new Proxy(
+  return new Proxy(
     {},
     {
       get(_, prop) {
@@ -125,7 +112,24 @@ if (isProd) {
       },
     }
   );
+}
 
+if (isProd) {
+  // Production: attempt to connect to real DB, but fall back to mock if connection fails
+  prisma = new PrismaClient();
+  prisma
+    .$connect()
+    .then(() => console.log("Prisma: successfully connected to database"))
+    .catch((err) => {
+      console.error(
+        "Prisma: unable to connect to database! Falling back to mock.",
+        err.message || err
+      );
+      // fallback to mock so endpoints can still respond with sample data
+      prisma = createMockPrisma();
+    });
+} else {
+  prisma = createMockPrisma();
   console.log("Prisma: running in local dev mode with mock data");
 }
 
