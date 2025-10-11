@@ -455,6 +455,8 @@ exports.listBySubcategory = async (req, res) => {
 // Flexible list
 exports.listby = async (req, res) => {
   try {
+    // Log incoming request for debugging (will appear in server logs)
+    console.log("product.listby called with body:", req.body);
     const allowedSortFields = [
       "id",
       "title",
@@ -484,6 +486,7 @@ exports.listby = async (req, res) => {
         brand: true,
       },
     };
+    console.log("product.listby prisma args:", findManyArgs);
     if (
       limit !== undefined &&
       limit !== null &&
@@ -498,6 +501,10 @@ exports.listby = async (req, res) => {
     res.json(products);
   } catch (err) {
     console.error("product.listby error:", err && err.stack ? err.stack : err);
+    // In development, return the original error message to help debugging.
+    if (process.env.NODE_ENV !== "production") {
+      return res.status(500).json({ message: "Server error", error: err.message || String(err) });
+    }
     res.status(500).json({ message: "Server error" });
   }
 };
