@@ -20,12 +20,7 @@ console.log("CORS middleware applied");
 // so ensure the proper headers are returned early. Use a dedicated handler
 // that echoes the request Origin header (or '*' if absent) so browsers
 // receive an Access-Control-Allow-Origin matching the requester.
-// Handle preflight OPTIONS in a path-agnostic way to avoid path-to-regexp
-// parsing issues on some platforms. This mirrors the headers produced by
-// the fallback middleware but runs earlier so serverless platforms that
-// short-circuit routing still receive them.
-app.use((req, res, next) => {
-  if (req.method !== "OPTIONS") return next();
+app.options("*", (req, res) => {
   const origin = req.get("origin") || "*";
   res.header("Access-Control-Allow-Origin", origin);
   res.header("Access-Control-Allow-Credentials", "true");
@@ -34,6 +29,7 @@ app.use((req, res, next) => {
     "Origin, X-Requested-With, Content-Type, Accept, Authorization"
   );
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  // 204 No Content for preflight
   return res.status(204).send();
 });
 
