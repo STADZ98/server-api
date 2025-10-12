@@ -58,48 +58,8 @@ exports.create = async (req, res) => {
 // ดึงรายการทั้งหมด
 exports.list = async (req, res) => {
   try {
-    // Return a lightweight representation to avoid large payloads
-    const categories = await prisma.category.findMany({
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        images: true,
-        isActive: true,
-      },
-      orderBy: { name: "asc" },
-    });
-
-    // Map images: if images is JSON string/array, try to extract first URL
-    const mapped = categories.map((c) => {
-      let imageUrl = null;
-      try {
-        if (c.images) {
-          const imgs = Array.isArray(c.images) ? c.images : JSON.parse(c.images || "[]");
-          if (Array.isArray(imgs) && imgs.length) {
-            const first = imgs.find(Boolean);
-            if (first && typeof first === "string") imageUrl = first;
-          } else if (typeof c.images === "string" && c.images.startsWith("data:")) {
-            // if it's base64 data URI, don't return it inline; signal null so client can use placeholder
-            imageUrl = null;
-          }
-        }
-      } catch (e) {
-        imageUrl = null;
-      }
-
-      return {
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        image: imageUrl,
-        isActive: c.isActive,
-      };
-    });
-
-    // Encourage CDN/browser caching for short period (can be tuned)
-    res.setHeader('Cache-Control', 'public, max-age=60');
-    res.json(mapped);
+    const categories = await prisma.category.findMany();
+    res.send(categories);
   } catch (err) {
     console.error("category.list error:", err && err.stack ? err.stack : err);
     if (process.env.NODE_ENV !== "production") {
