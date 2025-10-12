@@ -10,7 +10,7 @@ app.use(morgan("dev"));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 app.use(cors({ origin: true, credentials: true }));
-console.log('CORS middleware applied');
+console.log("CORS middleware applied");
 
 // Explicitly respond to preflight OPTIONS requests for all routes.
 // Some serverless platforms or proxies may not forward OPTIONS correctly,
@@ -34,34 +34,44 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
-console.log('Fallback CORS middleware installed');
+console.log("Fallback CORS middleware installed");
 
-console.log('Mounting explicit routes');
+console.log("Mounting explicit routes");
 // Mount explicit routes first (wrap requires to surface errors during dev)
 try {
   const subsub = require(path.join(__dirname, "routes", "subsubcategory"));
-  if (subsub && typeof subsub.use === "function") app.use("/api/subsubcategory", subsub);
+  if (subsub && typeof subsub.use === "function")
+    app.use("/api/subsubcategory", subsub);
   else console.warn("subsubcategory route did not export a router");
 } catch (err) {
-  console.error("Failed to load routes/subsubcategory.js:", err && err.stack ? err.stack : err);
+  console.error(
+    "Failed to load routes/subsubcategory.js:",
+    err && err.stack ? err.stack : err
+  );
 }
-console.log('Mounted subsubcategory (or failed)');
+console.log("Mounted subsubcategory (or failed)");
 try {
   const rev = require(path.join(__dirname, "routes", "review"));
   if (rev && typeof rev.use === "function") app.use("/api/review", rev);
   else console.warn("review route did not export a router");
 } catch (err) {
-  console.error("Failed to load routes/review.js:", err && err.stack ? err.stack : err);
+  console.error(
+    "Failed to load routes/review.js:",
+    err && err.stack ? err.stack : err
+  );
 }
-console.log('Mounted review (or failed)');
+console.log("Mounted review (or failed)");
 try {
   const ship = require(path.join(__dirname, "routes", "shipping"));
   if (ship && typeof ship.use === "function") app.use("/api/shipping", ship);
   else console.warn("shipping route did not export a router");
 } catch (err) {
-  console.error("Failed to load routes/shipping.js:", err && err.stack ? err.stack : err);
+  console.error(
+    "Failed to load routes/shipping.js:",
+    err && err.stack ? err.stack : err
+  );
 }
-console.log('Mounted shipping (or failed)');
+console.log("Mounted shipping (or failed)");
 
 // Mount all other routes in /routes
 const routesDir = path.join(__dirname, "routes");
@@ -72,9 +82,9 @@ readdirSync(routesDir)
   .forEach((p) => {
     const full = path.join(routesDir, p);
     try {
-      console.log('Loading route file', p);
+      console.log("Loading route file", p);
       const r = require(full);
-      console.log('Loaded route module', p);
+      console.log("Loaded route module", p);
       // Validate that the required module is a function or router-like
       if (typeof r === "function" || (r && typeof r.use === "function")) {
         app.use("/api", r);
@@ -82,10 +92,13 @@ readdirSync(routesDir)
         console.warn(`Skipped loading route file (not a router): ${p}`);
       }
     } catch (err) {
-      console.error(`Failed to load route file ${p}:`, err && err.stack ? err.stack : err);
+      console.error(
+        `Failed to load route file ${p}:`,
+        err && err.stack ? err.stack : err
+      );
     }
   });
-console.log('Finished mounting routes');
+console.log("Finished mounting routes");
 
 // 404 handler
 app.use((req, res, next) => {
