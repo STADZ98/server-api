@@ -27,6 +27,8 @@ router.get("/product/:id", read);
 router.delete("/product/:id", authCheck, adminCheck, remove);
 router.post("/productby", listby);
 router.post("/search/filters", searchfilters);
+// Lightweight endpoint for category -> product counts
+router.get("/product-counts", productCounts);
 router.post("/images", authCheck, adminCheck, createImages);
 router.post("/removeimages", authCheck, adminCheck, removeImage);
 

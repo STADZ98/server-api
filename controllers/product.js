@@ -578,3 +578,34 @@ exports.listByBrand = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// Return counts grouped by category (lightweight aggregated endpoint)
+exports.productCounts = async (req, res) => {
+  try {
+    // Group products by categoryId and count
+    const groups = await prisma.product.groupBy({
+      by: ["categoryId"],
+      _count: { id: true },
+    });
+
+    // Fetch category names for mapping
+    const categories = await prisma.category.findMany({
+      select: { id: true, name: true },
+    });
+    const catMap = new Map(categories.map((c) => [c.id, c.name]));
+
+    // Build result: include categoryId, name (if available), and count
+    const result = groups
+      .filter((g) => g.categoryId != null)
+      .map((g) => ({
+        categoryId: g.categoryId,
+        name: catMap.get(g.categoryId) || null,
+        count: g._count?.id || 0,
+      }));
+
+    res.json(result);
+  } catch (err) {
+    console.error("productCounts error:", err && err.stack ? err.stack : err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
