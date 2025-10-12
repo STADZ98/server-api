@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const app = express();
 const morgan = require("morgan");
+const compression = require("compression");
 const { readdirSync } = require("fs");
 const cors = require("cors");
 const path = require("path");
@@ -9,6 +10,8 @@ const path = require("path");
 app.use(morgan("dev"));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
+// Compress responses to reduce transfer size (gzip/br)
+app.use(compression());
 app.use(cors({ origin: true, credentials: true }));
 console.log("CORS middleware applied");
 

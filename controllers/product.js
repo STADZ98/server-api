@@ -158,30 +158,39 @@ exports.list = async (req, res) => {
     let take = parseInt(count);
     if (isNaN(take) || take <= 0) take = 10;
 
+    // Return lightweight product summaries for list views to reduce payload
     const products = await prisma.product.findMany({
       take,
       orderBy: { createdAt: "desc" },
-      include: {
-        category: true,
-        subcategory: true,
-        subSubcategory: true,
-        brand: true,
+      select: {
+        id: true,
+        title: true,
+        price: true,
+        quantity: true,
+        category: { select: { id: true, name: true } },
+        images: true,
+        createdAt: true,
       },
     });
-    products.forEach((p) => {
-      p.images = parseImagesField(p.images);
-      // normalize first image to absolute url for convenience
-      p.image = buildImageUrl(
-        p.images && p.images.length ? p.images[0] : p.image || null,
-        req
-      );
-      if (Array.isArray(p.variants))
-        p.variants = p.variants.map((v) => ({
-          ...v,
-          images: parseImagesField(v.images),
-        }));
+
+    const mapped = products.map((p) => {
+      const imgs = parseImagesField(p.images);
+      const first = imgs && imgs.length ? imgs.find(Boolean) : null;
+      const image = first && typeof first === "string" ? buildImageUrl(first, req) : null;
+      return {
+        id: p.id,
+        title: p.title,
+        price: p.price,
+        quantity: p.quantity,
+        category: p.category,
+        image,
+        createdAt: p.createdAt,
+      };
     });
-    res.json(products);
+
+    // short cache for product lists
+    res.setHeader('Cache-Control', 'public, max-age=30');
+    res.json(mapped);
   } catch (err) {
     console.error("list error:", err && err.stack ? err.stack : err);
     if (process.env.NODE_ENV !== "production")
@@ -207,9 +216,20 @@ exports.read = async (req, res) => {
       },
     });
     if (!product) return res.status(404).json({ message: "Product not found" });
-    product.images = parseImagesField(product.images);
+    // normalize and sanitize images: parse JSON and expose URLs, do not inline base64
+    product.images = parseImagesField(product.images).map((img) => {
+      if (!img) return null;
+      if (typeof img === 'string' && img.startsWith('data:')) return null; // skip base64
+      return buildImageUrl(img, req);
+    }).filter(Boolean);
     if (Array.isArray(product.variants))
-      product.variants.forEach((v) => (v.images = parseImagesField(v.images)));
+      product.variants.forEach((v) => {
+        v.images = parseImagesField(v.images).map((img) => {
+          if (!img) return null;
+          if (typeof img === 'string' && img.startsWith('data:')) return null;
+          return buildImageUrl(img, req);
+        }).filter(Boolean);
+      });
     // attach convenient absolute url for first image
     product.image = buildImageUrl(
       product.images && product.images.length
