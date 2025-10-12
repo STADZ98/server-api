@@ -779,7 +779,103 @@ exports.getReturnRequests = async (req, res) => {
       },
     });
 
-    res.json({ ok: true, returnRequests: requests });
+    // Helpers: parse images field which may be JSON string or array
+    const parseImagesField = (field) => {
+      if (!field) return [];
+      if (Array.isArray(field)) return field;
+      if (typeof field === "string") {
+        try {
+          return JSON.parse(field);
+        } catch (e) {
+          return [];
+        }
+      }
+      return [];
+    };
+
+    // Build absolute URL for an image entry (similar logic as product controller)
+    const buildImageUrl = (img) => {
+      if (!img) return null;
+      const url =
+        typeof img === "string"
+          ? img
+          : img.secure_url || img.url || img.src || null;
+      if (!url) return null;
+      if (/^(https?:)?\/\//i.test(url))
+        return url.startsWith("http://")
+          ? url.replace("http://", "https://")
+          : url;
+      if (/^data:/i.test(url) || /^blob:/i.test(url)) return url;
+      const apiBase =
+        process.env.VITE_API ||
+        process.env.VITE_API_URL ||
+        process.env.SERVER_URL ||
+        "";
+      const base = apiBase
+        ? apiBase.replace(/\/api\/?$/i, "").replace(/\/$/, "")
+        : "";
+      if (base) return `${base}/${String(url).replace(/^\/+/, "")}`;
+      if (req && req.protocol && req.get) {
+        const origin = `${req.protocol}://${req.get("host")}`.replace(
+          /\/$/,
+          ""
+        );
+        return `${origin}/${String(url).replace(/^\/+/, "")}`;
+      }
+      return url.startsWith("/") ? url : `/${String(url).replace(/^\/+/, "")}`;
+    };
+
+    // Map requests to include parsed product image (first image) so frontend can show it easily
+    const mapped = (requests || []).map((r) => {
+      const mappedProducts = Array.isArray(r.products)
+        ? r.products.map((p) => {
+            try {
+              const prod = p.product || null;
+              const prodImgs =
+                prod && prod.images
+                  ? Array.isArray(prod.images)
+                    ? prod.images
+                    : (() => {
+                        try {
+                          return JSON.parse(prod.images);
+                        } catch (e) {
+                          return [];
+                        }
+                      })()
+                  : [];
+
+              const firstImg = prodImgs && prodImgs.length ? prodImgs[0] : null;
+              const image = firstImg
+                ? typeof firstImg === "string"
+                  ? buildImageUrl(firstImg)
+                  : buildImageUrl(firstImg)
+                : null;
+
+              return {
+                id: p.id,
+                productId: p.productId,
+                variantId: p.variantId || null,
+                product: prod
+                  ? {
+                      id: prod.id,
+                      title: prod.title,
+                      image,
+                    }
+                  : null,
+              };
+            } catch (e) {
+              return { id: p.id, productId: p.productId };
+            }
+          })
+        : [];
+
+      return {
+        ...r,
+        products: mappedProducts,
+      };
+    });
+
+    res.json({ ok: true, returnRequests: mapped });
   } catch (err) {
     console.error("getReturnRequests error:", err);
     res.status(500).json({ ok: false, message: "Server Error" });
