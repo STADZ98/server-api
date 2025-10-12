@@ -176,7 +176,8 @@ exports.list = async (req, res) => {
     const mapped = products.map((p) => {
       const imgs = parseImagesField(p.images);
       const first = imgs && imgs.length ? imgs.find(Boolean) : null;
-      const image = first && typeof first === "string" ? buildImageUrl(first, req) : null;
+      const image =
+        first && typeof first === "string" ? buildImageUrl(first, req) : null;
       return {
         id: p.id,
         title: p.title,
@@ -189,7 +190,7 @@ exports.list = async (req, res) => {
     });
 
     // short cache for product lists
-    res.setHeader('Cache-Control', 'public, max-age=30');
+    res.setHeader("Cache-Control", "public, max-age=30");
     res.json(mapped);
   } catch (err) {
     console.error("list error:", err && err.stack ? err.stack : err);
@@ -217,18 +218,22 @@ exports.read = async (req, res) => {
     });
     if (!product) return res.status(404).json({ message: "Product not found" });
     // normalize and sanitize images: parse JSON and expose URLs, do not inline base64
-    product.images = parseImagesField(product.images).map((img) => {
-      if (!img) return null;
-      if (typeof img === 'string' && img.startsWith('data:')) return null; // skip base64
-      return buildImageUrl(img, req);
-    }).filter(Boolean);
+    product.images = parseImagesField(product.images)
+      .map((img) => {
+        if (!img) return null;
+        if (typeof img === "string" && img.startsWith("data:")) return null; // skip base64
+        return buildImageUrl(img, req);
+      })
+      .filter(Boolean);
     if (Array.isArray(product.variants))
       product.variants.forEach((v) => {
-        v.images = parseImagesField(v.images).map((img) => {
-          if (!img) return null;
-          if (typeof img === 'string' && img.startsWith('data:')) return null;
-          return buildImageUrl(img, req);
-        }).filter(Boolean);
+        v.images = parseImagesField(v.images)
+          .map((img) => {
+            if (!img) return null;
+            if (typeof img === "string" && img.startsWith("data:")) return null;
+            return buildImageUrl(img, req);
+          })
+          .filter(Boolean);
       });
     // attach convenient absolute url for first image
     product.image = buildImageUrl(

@@ -75,11 +75,16 @@ exports.list = async (req, res) => {
       let imageUrl = null;
       try {
         if (c.images) {
-          const imgs = Array.isArray(c.images) ? c.images : JSON.parse(c.images || "[]");
+          const imgs = Array.isArray(c.images)
+            ? c.images
+            : JSON.parse(c.images || "[]");
           if (Array.isArray(imgs) && imgs.length) {
             const first = imgs.find(Boolean);
             if (first && typeof first === "string") imageUrl = first;
-          } else if (typeof c.images === "string" && c.images.startsWith("data:")) {
+          } else if (
+            typeof c.images === "string" &&
+            c.images.startsWith("data:")
+          ) {
             // if it's base64 data URI, don't return it inline; signal null so client can use placeholder
             imageUrl = null;
           }
@@ -98,7 +103,7 @@ exports.list = async (req, res) => {
     });
 
     // Encourage CDN/browser caching for short period (can be tuned)
-    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.setHeader("Cache-Control", "public, max-age=60");
     res.json(mapped);
   } catch (err) {
     console.error("category.list error:", err && err.stack ? err.stack : err);
