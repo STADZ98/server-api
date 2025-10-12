@@ -1,6 +1,6 @@
 // prisma.js
-// Prisma client สำหรับ production ใช้ฐานข้อมูลจริง
-// Local dev fallback เป็น mock data
+// ✅ ใช้ Prisma Client จริงใน production
+// ✅ ใช้ mock data ใน development แบบปลอดภัย
 
 const { PrismaClient } = require("@prisma/client");
 const isProd = process.env.NODE_ENV === "production";
@@ -8,125 +8,127 @@ const isProd = process.env.NODE_ENV === "production";
 let prisma;
 
 if (isProd) {
-  // Production: ต่อฐานข้อมูลจริง
+  // Production: ใช้ฐานข้อมูลจริง
   prisma = new PrismaClient();
+
   prisma
     .$connect()
-    .then(() => console.log("Prisma: successfully connected to database"))
+    .then(() => console.log("✅ Prisma: successfully connected to database"))
     .catch((err) => {
-      console.error(
-        "Prisma: unable to connect to database!",
-        err.message || err
-      );
+      console.error("❌ Prisma: unable to connect to database!", err.message);
     });
 } else {
-  // Local dev: mock data fallback
-  const makeModelMock = (name) => {
-    const samples = {
-      category: [
-        {
-          id: 1,
-          name: "ตัวอย่างหมวดหมู่",
-          images: "",
-          slug: "ตัวอย่างหมวดหมู่",
-          isActive: true,
-        },
-        {
-          id: 2,
-          name: "อาหารสัตว์",
-          images: "",
-          slug: "อาหาร-สัตว์",
-          isActive: true,
-        },
-      ],
-      subcategory: [
-        {
-          id: 1,
-          name: "แห้ง",
-          images: "",
-          slug: "แห้ง",
-          categoryId: 2,
-          isActive: true,
-        },
-        {
-          id: 2,
-          name: "เปียก",
-          images: "",
-          slug: "เปียก",
-          categoryId: 2,
-          isActive: true,
-        },
-      ],
-      product: [
-        {
-          id: 1,
-          title: "อาหารแมวตัวอย่าง",
-          description: "คำอธิบายตัวอย่าง",
-          price: 199,
-          sold: 0,
-          quantity: 10,
-        },
-        {
-          id: 2,
-          title: "อาหารสุนัขตัวอย่าง",
-          description: "คำอธิบายตัวอย่าง",
-          price: 299,
-          sold: 0,
-          quantity: 5,
-        },
-      ],
-      brand: [{ id: 1, name: "ยี่ห้อA", images: "" }],
-    };
+  // Development: mock data
+  console.log("⚙️ Prisma: running in local dev mode with mock data");
 
-    return {
-      findMany: async () => samples[name] || [],
-      findUnique: async (args) => {
-        const list = samples[name] || [];
-        if (!args || !args.where) return list[0] || null;
-        if (args.where.id)
-          return list.find((i) => i.id === Number(args.where.id)) || null;
-        return list[0] || null;
+  const mockData = {
+    category: [
+      {
+        id: 1,
+        name: "อาหารสัตว์",
+        images: "",
+        slug: "อาหารสัตว์",
+        isActive: true,
       },
-      findFirst: async () => (samples[name] || [])[0] || null,
-      create: async ({ data }) => ({ id: Date.now(), ...data }),
-      update: async () => {
-        throw new Error(`${name}.update() called but DB not connected`);
+      {
+        id: 2,
+        name: "อุปกรณ์สัตว์เลี้ยง",
+        images: "",
+        slug: "อุปกรณ์-สัตว์เลี้ยง",
+        isActive: true,
       },
-      delete: async () => {
-        throw new Error(`${name}.delete() called but DB not connected`);
+    ],
+    subcategory: [
+      {
+        id: 1,
+        name: "อาหารแมว",
+        images: "",
+        slug: "อาหารแมว",
+        categoryId: 1,
+        isActive: true,
       },
-      count: async () => (samples[name] || []).length,
-    };
+      {
+        id: 2,
+        name: "อาหารสุนัข",
+        images: "",
+        slug: "อาหารสุนัข",
+        categoryId: 1,
+        isActive: true,
+      },
+    ],
+    brand: [{ id: 1, name: "PetPro", images: "" }],
+    product: [
+      {
+        id: 1,
+        title: "อาหารแมวสูตรปลาทะเล",
+        description: "อุดมไปด้วยสารอาหารครบถ้วน",
+        price: 199,
+        sold: 10,
+        quantity: 20,
+        categoryId: 1,
+        subcategoryId: 1,
+        brandId: 1,
+        images: "[]",
+      },
+      {
+        id: 2,
+        title: "ปลอกคอสุนัขหนังแท้",
+        description: "ทนทานและดูดี",
+        price: 299,
+        sold: 5,
+        quantity: 15,
+        categoryId: 2,
+        subcategoryId: 2,
+        brandId: 1,
+        images: "[]",
+      },
+    ],
+    user: [
+      {
+        id: 1,
+        email: "test@example.com",
+        password: "hashedpassword",
+        role: "user",
+        enabled: true,
+      },
+    ],
   };
 
-  const mockPrisma = {
-    category: makeModelMock("category"),
-    subcategory: makeModelMock("subcategory"),
-    subSubcategory: makeModelMock("subSubcategory"),
-    brand: makeModelMock("brand"),
-    product: makeModelMock("product"),
-    order: makeModelMock("order"),
-    cart: makeModelMock("cart"),
-    productOnOrder: makeModelMock("productOnOrder"),
-    productOnCart: makeModelMock("productOnCart"),
-    productVariant: makeModelMock("productVariant"),
-    // image and variantImage models removed; images are stored as JSON on product/productVariant
-    review: makeModelMock("review"),
-    address: makeModelMock("address"),
-    user: makeModelMock("user"),
-  };
+  const makeModelMock = (name) => ({
+    findMany: async () => mockData[name] || [],
+    findUnique: async (args) => {
+      const list = mockData[name] || [];
+      if (!args?.where) return list[0] || null;
+      if (args.where.id) {
+        return list.find((i) => i.id === Number(args.where.id)) || null;
+      }
+      return list[0] || null;
+    },
+    findFirst: async () => (mockData[name] || [])[0] || null,
+    create: async ({ data }) => {
+      const newItem = { id: Date.now(), ...data };
+      (mockData[name] ||= []).push(newItem);
+      return newItem;
+    },
+    update: async () => {
+      throw new Error(`${name}.update() called but DB not connected`);
+    },
+    delete: async () => {
+      throw new Error(`${name}.delete() called but DB not connected`);
+    },
+    count: async () => (mockData[name] || []).length,
+  });
 
+  // Mock Prisma Client
   prisma = new Proxy(
     {},
     {
       get(_, prop) {
-        if (prop in mockPrisma) return mockPrisma[prop];
-        return undefined;
+        if (mockData[prop]) return makeModelMock(prop);
+        return makeModelMock(prop); // fallback
       },
     }
   );
-
-  console.log("Prisma: running in local dev mode with mock data");
 }
 
 module.exports = prisma;
