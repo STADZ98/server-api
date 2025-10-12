@@ -924,6 +924,10 @@ exports.getReviewsAdmin = async (req, res) => {
       include: {
         user: { select: { id: true, email: true, picture: true } },
         images: { select: { id: true, filename: true } },
+        // include product basic info so admin UI can show product name/title
+        product: { select: { id: true, title: true } },
+        // include replyBy user info to show which admin replied
+        replyBy: { select: { id: true, email: true } },
       },
     });
     res.json({ ok: true, reviews });
