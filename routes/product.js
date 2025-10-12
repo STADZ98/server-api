@@ -11,6 +11,7 @@ const {
   removeImage,
   listBySubcategory,
   listByBrand,
+  productCounts,
 } = require("../controllers/product");
 const { authCheck, adminCheck } = require("../middlewares/authCheck");
 
