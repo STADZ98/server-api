@@ -895,9 +895,12 @@ exports.updateReturnRequestStatus = async (req, res) => {
     if (!status || !allowed.includes(status))
       return res.status(400).json({ message: "Invalid status" });
 
+    // Only update fields that exist on the ReturnRequest model in Prisma schema.
+    // The Prisma schema for ReturnRequest does not define `adminNote` or `handledAt`,
+    // so attempting to write them causes a Prisma error (500). Update only `status`.
     const updated = await prisma.returnRequest.update({
       where: { id },
-      data: { status, adminNote: adminNote || null, handledAt: new Date() },
+      data: { status },
     });
 
     res.json({ ok: true, returnRequest: updated });
