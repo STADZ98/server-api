@@ -11,6 +11,27 @@ app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 app.use(cors({ origin: true, credentials: true }));
 
+// Explicitly respond to preflight OPTIONS requests for all routes.
+// Some serverless platforms or proxies may not forward OPTIONS correctly,
+// so this ensures the proper headers are returned.
+app.options("*", cors({ origin: true, credentials: true }));
+
+// Fallback middleware: ensure CORS headers are present on every response.
+// This guards against environments where the CORS middleware might be skipped
+// for certain requests (for example, errors during routing or platform quirks).
+app.use((req, res, next) => {
+  const origin = req.get("origin") || "*";
+  res.header("Access-Control-Allow-Origin", origin);
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 // Mount explicit routes first
 app.use(
   "/api/subsubcategory",
