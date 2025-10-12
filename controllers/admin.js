@@ -833,3 +833,85 @@ exports.getReviewsAdmin = async (req, res) => {
     res.status(500).json({ ok: false, message: "Server Error" });
   }
 };
+
+// =======================
+// ✅ Admin: Reply to a review (POST/PATCH/DELETE via admin routes)
+// These mirror the functionality in reviewController but are exposed under
+// the admin namespace so admin UIs can call `/api/admin/reviews/:id/reply`.
+// =======================
+exports.adminReplyToReview = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { reply } = req.body;
+    const adminId = req.user && req.user.id;
+
+    if (isNaN(id))
+      return res.status(400).json({ message: "Invalid review id" });
+    if (!reply) return res.status(400).json({ message: "Reply text required" });
+
+    const exists = await prisma.review.findUnique({ where: { id } });
+    if (!exists) return res.status(404).json({ message: "Review not found" });
+
+    const updated = await prisma.review.update({
+      where: { id },
+      data: { reply, replyById: Number(adminId), repliedAt: new Date() },
+    });
+
+    res.json({ ok: true, review: updated });
+  } catch (err) {
+    console.error("adminReplyToReview error:", err);
+    res
+      .status(500)
+      .json({ ok: false, message: "Server Error", error: err.message });
+  }
+};
+
+exports.adminUpdateReply = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { reply } = req.body;
+    const adminId = req.user && req.user.id;
+
+    if (isNaN(id))
+      return res.status(400).json({ message: "Invalid review id" });
+    if (!reply) return res.status(400).json({ message: "Reply text required" });
+
+    const exists = await prisma.review.findUnique({ where: { id } });
+    if (!exists) return res.status(404).json({ message: "Review not found" });
+
+    const updated = await prisma.review.update({
+      where: { id },
+      data: { reply, replyById: Number(adminId), repliedAt: new Date() },
+    });
+
+    res.json({ ok: true, review: updated });
+  } catch (err) {
+    console.error("adminUpdateReply error:", err);
+    res
+      .status(500)
+      .json({ ok: false, message: "Server Error", error: err.message });
+  }
+};
+
+exports.adminDeleteReply = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id))
+      return res.status(400).json({ message: "Invalid review id" });
+
+    const exists = await prisma.review.findUnique({ where: { id } });
+    if (!exists) return res.status(404).json({ message: "Review not found" });
+
+    const updated = await prisma.review.update({
+      where: { id },
+      data: { reply: null, replyById: null, repliedAt: null },
+    });
+
+    res.json({ ok: true, review: updated });
+  } catch (err) {
+    console.error("adminDeleteReply error:", err);
+    res
+      .status(500)
+      .json({ ok: false, message: "Server Error", error: err.message });
+  }
+};

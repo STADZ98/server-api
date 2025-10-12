@@ -42,5 +42,30 @@ router.patch(
 );
 // Admin reviews list
 router.get("/admin/reviews", authCheck, adminCheck, getReviewsAdmin);
+// Admin review reply endpoints (mirror /api/review/:id/reply but under admin namespace)
+const {
+  adminReplyToReview,
+  adminUpdateReply,
+  adminDeleteReply,
+} = require("../controllers/admin");
+
+router.post(
+  "/admin/reviews/:id/reply",
+  authCheck,
+  adminCheck,
+  adminReplyToReview
+);
+router.patch(
+  "/admin/reviews/:id/reply",
+  authCheck,
+  adminCheck,
+  adminUpdateReply
+);
+router.delete(
+  "/admin/reviews/:id/reply",
+  authCheck,
+  adminCheck,
+  adminDeleteReply
+);
 
 module.exports = router;
