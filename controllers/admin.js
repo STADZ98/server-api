@@ -755,3 +755,81 @@ exports.getTrackingFormats = async (req, res) => {
     res.status(500).json({ ok: false, message: "Server Error" });
   }
 };
+
+// =======================
+// ✅ Admin: List return requests
+// =======================
+exports.getReturnRequests = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const perPage = parseInt(req.query.perPage) || 20;
+    const where = {};
+    const status = req.query.status;
+    if (status) where.status = status;
+
+    const requests = await prisma.returnRequest.findMany({
+      skip: (page - 1) * perPage,
+      take: perPage,
+      orderBy: { createdAt: "desc" },
+      where,
+      include: {
+        products: { include: { product: true } },
+        user: { select: { id: true, email: true, picture: true } },
+        order: { select: { id: true, orderStatus: true, trackingCode: true } },
+      },
+    });
+
+    res.json({ ok: true, returnRequests: requests });
+  } catch (err) {
+    console.error("getReturnRequests error:", err);
+    res.status(500).json({ ok: false, message: "Server Error" });
+  }
+};
+
+// =======================
+// ✅ Admin: Update return request status (approve/reject)
+// =======================
+exports.updateReturnRequestStatus = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id))
+      return res.status(400).json({ message: "Invalid id" });
+    const { status, adminNote } = req.body;
+    const allowed = ["PENDING", "APPROVED", "REJECTED"];
+    if (!status || !allowed.includes(status))
+      return res.status(400).json({ message: "Invalid status" });
+
+    const updated = await prisma.returnRequest.update({
+      where: { id },
+      data: { status, adminNote: adminNote || null, handledAt: new Date() },
+    });
+
+    res.json({ ok: true, returnRequest: updated });
+  } catch (err) {
+    console.error("updateReturnRequestStatus error:", err);
+    res.status(500).json({ ok: false, message: "Server Error" });
+  }
+};
+
+// =======================
+// ✅ Admin: List recent reviews
+// =======================
+exports.getReviewsAdmin = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const perPage = parseInt(req.query.perPage) || 50;
+    const reviews = await prisma.review.findMany({
+      skip: (page - 1) * perPage,
+      take: perPage,
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: { select: { id: true, email: true, picture: true } },
+        images: { select: { id: true, filename: true } },
+      },
+    });
+    res.json({ ok: true, reviews });
+  } catch (err) {
+    console.error("getReviewsAdmin error:", err);
+    res.status(500).json({ ok: false, message: "Server Error" });
+  }
+};

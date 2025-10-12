@@ -12,6 +12,9 @@ const {
   deleteOrder,
   debugPrisma,
   getTrackingFormats,
+  getReturnRequests,
+  updateReturnRequestStatus,
+  getReviewsAdmin,
 } = require("../controllers/admin");
 
 const { updateOrderShipping } = require("../controllers/admin");
@@ -29,5 +32,10 @@ router.delete("/admin/order/:id", authCheck, deleteOrder);
 router.put("/admin/order-shipping", authCheck, updateOrderShipping);
 router.post("/admin/generate-tracking", authCheck, generateTrackingCode);
 router.get("/admin/tracking-formats", authCheck, getTrackingFormats);
+// Admin return requests
+router.get("/admin/return-requests", authCheck, getReturnRequests);
+router.patch("/admin/return-request/:id", authCheck, updateReturnRequestStatus);
+// Admin reviews list
+router.get("/admin/reviews", authCheck, getReviewsAdmin);
 
 module.exports = router;
