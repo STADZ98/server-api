@@ -27,6 +27,9 @@ console.log("CORS middleware applied");
 // for certain requests (for example, errors during routing or platform quirks).
 app.use((req, res, next) => {
   const origin = req.get("origin") || "*";
+  // Log origin for diagnostic purposes in production when debugging CORS
+  if (process.env.NODE_ENV !== "production")
+    console.log("Request origin:", origin);
   res.header("Access-Control-Allow-Origin", origin);
   res.header("Access-Control-Allow-Credentials", "true");
   res.header(
@@ -34,7 +37,12 @@ app.use((req, res, next) => {
     "Origin, X-Requested-With, Content-Type, Accept, Authorization"
   );
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  if (req.method === "OPTIONS") {
+    // Return 204 for preflight and include small body for some proxies that
+    // drop empty responses. Also ensure headers are flushed.
+    res.status(204);
+    return res.send();
+  }
   next();
 });
 console.log("Fallback CORS middleware installed");
@@ -105,13 +113,31 @@ console.log("Finished mounting routes");
 
 // 404 handler
 app.use((req, res, next) => {
+  // Ensure CORS headers exist on 404 responses
+  const origin = req.get("origin") || "*";
+  res.header("Access-Control-Allow-Origin", origin);
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.status(404).json({ message: "API endpoint not found" });
 });
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error(`Error on ${req.method} ${req.originalUrl}:`, err.stack);
-  res.status(500).json({ message: "Something broke!", error: err.message });
+  console.error(
+    `Error on ${req.method} ${req.originalUrl}:`,
+    err && err.stack ? err.stack : err
+  );
+  // Ensure error responses include CORS headers so the browser can receive the body
+  const origin = req.get("origin") || "*";
+  res.header("Access-Control-Allow-Origin", origin);
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  if (process.env.NODE_ENV !== "production") {
+    return res
+      .status(500)
+      .json({ message: "Something broke!", error: err.message });
+  }
+  res.status(500).json({ message: "Something broke!" });
 });
 
 // ❌ ลบ app.listen(5005)
