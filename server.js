@@ -17,10 +17,25 @@ console.log("CORS middleware applied");
 
 // Explicitly respond to preflight OPTIONS requests for all routes.
 // Some serverless platforms or proxies may not forward OPTIONS correctly,
-// so this ensures the proper headers are returned.
-// Note: do NOT register app.options with '*' or '/*' — some path-to-regexp
-// versions treat '*' as a wildcard token needing a name and will throw.
-// We rely on the global fallback middleware below to respond to OPTIONS.
+// so ensure the proper headers are returned early. Use a dedicated handler
+// that echoes the request Origin header (or '*' if absent) so browsers
+// receive an Access-Control-Allow-Origin matching the requester.
+// Handle preflight OPTIONS in a path-agnostic way to avoid path-to-regexp
+// parsing issues on some platforms. This mirrors the headers produced by
+// the fallback middleware but runs earlier so serverless platforms that
+// short-circuit routing still receive them.
+app.use((req, res, next) => {
+  if (req.method !== "OPTIONS") return next();
+  const origin = req.get("origin") || "*";
+  res.header("Access-Control-Allow-Origin", origin);
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  return res.status(204).send();
+});
 
 // Fallback middleware: ensure CORS headers are present on every response.
 // This guards against environments where the CORS middleware might be skipped
