@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { authCheck } = require("../middlewares/authCheck");
+const { authCheck, adminCheck } = require("../middlewares/authCheck");
 const {
   getAdminProfile,
   getOrdersAdmin,
@@ -33,9 +33,14 @@ router.put("/admin/order-shipping", authCheck, updateOrderShipping);
 router.post("/admin/generate-tracking", authCheck, generateTrackingCode);
 router.get("/admin/tracking-formats", authCheck, getTrackingFormats);
 // Admin return requests
-router.get("/admin/return-requests", authCheck, getReturnRequests);
-router.patch("/admin/return-request/:id", authCheck, updateReturnRequestStatus);
+router.get("/admin/return-requests", authCheck, adminCheck, getReturnRequests);
+router.patch(
+  "/admin/return-request/:id",
+  authCheck,
+  adminCheck,
+  updateReturnRequestStatus
+);
 // Admin reviews list
-router.get("/admin/reviews", authCheck, getReviewsAdmin);
+router.get("/admin/reviews", authCheck, adminCheck, getReviewsAdmin);
 
 module.exports = router;
