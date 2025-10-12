@@ -58,18 +58,17 @@ exports.create = async (req, res) => {
 // ดึงรายการทั้งหมด
 exports.list = async (req, res) => {
   try {
-    const categories = await prisma.category.findMany();
-    res.send(categories);
+    console.log("📦 Fetching categories...");
+    const categories = await prisma.category.findMany({
+      orderBy: { id: "asc" },
+    });
+    res.json(categories);
   } catch (err) {
-    console.error("category.list error:", err && err.stack ? err.stack : err);
-    if (process.env.NODE_ENV !== "production") {
-      return res
-        .status(500)
-        .json({ message: "server error", error: err.message || String(err) });
-    }
-    res.status(500).json({ message: "server error" });
+    console.error("❌ category.list error:", err.message, err.stack);
+    res.status(500).json({ message: "server error", error: err.message });
   }
 };
+
 
 // ลบ Category (แบบส่งคืนข้อมูล)
 exports.remove = async (req, res) => {

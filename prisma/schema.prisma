@@ -8,6 +8,239 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model User {
+  id             Int             @id @default(autoincrement())
+  email          String          @unique
+  password       String?
+  picture        String?
+  role           Role            @default(user)
+  enabled        Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  addresses      Address[]
+  carts          Cart[]          @relation("UserCarts")
+  orders         Order[]         @relation("UserOrders")
+  ReturnRequest  ReturnRequest[]
+  repliedReviews Review[]        @relation("ReviewReply")
+  reviews        Review[]
+}
+
+model Category {
+  id            Int           @id @default(autoincrement())
+  name          String        @unique
+  images        String
+  slug          String        @unique @db.VarChar(191)
+  isActive      Boolean       @default(true)
+  products      Product[]
+  subcategories Subcategory[]
+}
+
+model Subcategory {
+  id               Int              @id @default(autoincrement())
+  name             String
+  images           String
+  slug             String           @unique
+  isActive         Boolean          @default(true)
+  categoryId       Int
+  products         Product[]        @relation("ProductToSubcategory")
+  subsubcategories SubSubcategory[]
+  category         Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([name, categoryId])
+}
+
+model SubSubcategory {
+  id            Int         @id @default(autoincrement())
+  name          String
+  slug          String      @unique @db.VarChar(191)
+  images        String
+  isActive      Boolean     @default(true)
+  subcategoryId Int
+  products      Product[]   @relation("ProductToSubSubcategory")
+  subcategory   Subcategory @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([name, subcategoryId])
+}
+
+model Brand {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  images    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id               Int              @id @default(autoincrement())
+  title            String
+  description      String
+  price            Float
+  sold             Int              @default(0)
+  quantity         Int
+  categoryId       Int?
+  subcategoryId    Int?
+  subSubcategoryId Int?
+  brandId          Int?
+  images           String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  brand            Brand?           @relation(fields: [brandId], references: [id])
+  category         Category?        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  subSubcategory   SubSubcategory?  @relation("ProductToSubSubcategory", fields: [subSubcategoryId], references: [id], onDelete: Cascade)
+  subcategory      Subcategory?     @relation("ProductToSubcategory", fields: [subcategoryId], references: [id], onDelete: Cascade)
+  cartItems        ProductOnCart[]
+  orderItems       ProductOnOrder[]
+  variants         ProductVariant[]
+  ReturnProduct    ReturnProduct[]
+  reviews          Review[]
+}
+
+model ProductVariant {
+  id             Int              @id @default(autoincrement())
+  productId      Int
+  title          String?
+  sku            String?          @unique
+  price          Float?
+  quantity       Int              @default(0)
+  sold           Int              @default(0)
+  attributes     Json?
+  isActive       Boolean          @default(true)
+  images         String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  ProductOnCart  ProductOnCart[]
+  ProductOnOrder ProductOnOrder[]
+  product        Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  reviews        Review[]
+}
+
+model Order {
+  id              Int              @id @default(autoincrement())
+  email           String?
+  addressId       Int?
+  cartTotal       Float
+  trackingCarrier String?
+  trackingCode    String?
+  orderStatus     OrderStatus      @default(NOT_PROCESSED)
+  stripePaymentId String
+  paymentMethod   String?
+  amount          Int
+  status          PaymentStatus
+  currency        String
+  orderedById     Int?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  address         Address?         @relation(fields: [addressId], references: [id])
+  orderedBy       User?            @relation("UserOrders", fields: [orderedById], references: [id])
+  products        ProductOnOrder[]
+  ReturnRequest   ReturnRequest[]
+  reviews         Review[]
+}
+
+model ProductOnOrder {
+  id        Int             @id @default(autoincrement())
+  productId Int
+  variantId Int?
+  orderId   Int
+  count     Int
+  price     Float
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+}
+
+model ReturnRequest {
+  id           Int             @id @default(autoincrement())
+  orderId      Int
+  userId       Int
+  reason       String
+  customReason String?
+  status       String          @default("PENDING")
+  createdAt    DateTime        @default(now())
+  products     ReturnProduct[]
+  order        Order           @relation(fields: [orderId], references: [id])
+  user         User            @relation(fields: [userId], references: [id])
+}
+
+model ReturnProduct {
+  id              Int           @id @default(autoincrement())
+  returnRequestId Int
+  productId       Int
+  product         Product       @relation(fields: [productId], references: [id])
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id])
+}
+
+model Cart {
+  id          Int             @id @default(autoincrement())
+  cartTotal   Float
+  orderedById Int?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  orderedBy   User?           @relation("UserCarts", fields: [orderedById], references: [id])
+  products    ProductOnCart[]
+}
+
+model ProductOnCart {
+  id        Int             @id @default(autoincrement())
+  cartId    Int
+  productId Int
+  variantId Int?
+  count     Int
+  price     Float
+  cart      Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+}
+
+model Review {
+  id        Int             @id @default(autoincrement())
+  productId Int
+  userId    Int
+  rating    Int
+  comment   String
+  orderId   Int?
+  variantId Int?
+  createdAt DateTime        @default(now())
+  repliedAt DateTime?
+  reply     String?
+  replyById Int?
+  order     Order?          @relation(fields: [orderId], references: [id])
+  product   Product         @relation(fields: [productId], references: [id])
+  replyBy   User?           @relation("ReviewReply", fields: [replyById], references: [id])
+  user      User            @relation(fields: [userId], references: [id])
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+  images    ReviewImage[]
+}
+
+model ReviewImage {
+  id        Int      @id @default(autoincrement())
+  reviewId  Int
+  filename  String?
+  mime      String
+  data      Bytes
+  createdAt DateTime @default(now())
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+}
+
+model Address {
+  id        Int     @id @default(autoincrement())
+  address   String
+  telephone String
+  name      String
+  userId    Int
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders    Order[]
+}
+
+model TrackingSequence {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  counter   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum Role {
   user
   admin
@@ -25,271 +258,4 @@ enum PaymentStatus {
   PENDING
   PAID
   FAILED
-}
-
-model User {
-  id       Int     @id @default(autoincrement())
-  email    String  @unique
-  password String?
-  picture  String?
-  role     Role    @default(user)
-  enabled  Boolean @default(true)
-
-  orders    Order[]   @relation("UserOrders")
-  carts     Cart[]    @relation("UserCarts")
-  addresses Address[]
-
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  reviews        Review[]
-  // Reviews the user replied to (admin replies)
-  repliedReviews Review[]        @relation("ReviewReply")
-  ReturnRequest  ReturnRequest[]
-}
-
-model Category {
-  id            Int           @id @default(autoincrement())
-  name          String        @unique
-  images        String        @db.Text
-  slug          String        @unique @db.VarChar(191)
-  isActive      Boolean       @default(true)
-  subcategories Subcategory[]
-  products      Product[]
-}
-
-model Subcategory {
-  id               Int              @id @default(autoincrement())
-  name             String
-  images           String           @db.Text
-  slug             String           @unique
-  isActive         Boolean          @default(true)
-  categoryId       Int
-  category         Category         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  subsubcategories SubSubcategory[]
-  products         Product[]        @relation("ProductToSubcategory")
-
-  @@unique([name, categoryId])
-}
-
-model SubSubcategory {
-  id            Int         @id @default(autoincrement())
-  name          String
-  slug          String      @unique @db.VarChar(191)
-  images        String      @db.Text
-  isActive      Boolean     @default(true)
-  subcategoryId Int
-  subcategory   Subcategory @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
-  products      Product[]   @relation("ProductToSubSubcategory")
-
-  @@unique([name, subcategoryId])
-}
-
-model Brand {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  images    String?   @db.Text
-  products  Product[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-}
-
-model Product {
-  id          Int    @id @default(autoincrement())
-  title       String
-  description String @db.Text
-  price       Float
-  sold        Int    @default(0)
-  quantity    Int
-
-  categoryId Int?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-
-  subcategoryId Int?
-  subcategory   Subcategory? @relation("ProductToSubcategory", fields: [subcategoryId], references: [id], onDelete: Cascade)
-
-  subSubcategoryId Int?
-  subSubcategory   SubSubcategory? @relation("ProductToSubSubcategory", fields: [subSubcategoryId], references: [id], onDelete: Cascade)
-
-  brandId Int?
-  brand   Brand? @relation(fields: [brandId], references: [id])
-
-  orderItems ProductOnOrder[]
-  cartItems  ProductOnCart[]
-  images     String?          @db.Text
-
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  reviews       Review[]
-  ReturnProduct ReturnProduct[]
-
-  // New: variants (sub-products / product ย่อย)
-  variants ProductVariant[]
-}
-
-// New model: product variants (sub-products) — each variant belongs to a parent Product
-model ProductVariant {
-  id        Int     @id @default(autoincrement())
-  productId Int
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  title      String?
-  sku        String? @unique
-  price      Float?
-  quantity   Int     @default(0)
-  sold       Int     @default(0)
-  attributes Json? // e.g. { "color": "red", "size": "M" }
-  isActive   Boolean @default(true)
-
-  images String? @db.Text
-
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  ProductOnOrder ProductOnOrder[]
-  ProductOnCart  ProductOnCart[]
-  reviews        Review[]
-}
-
-// Images specific to variants (keeps existing Product->Image untouched)
-
-model Order {
-  id              Int              @id @default(autoincrement())
-  email           String?
-  addressId       Int?
-  address         Address?         @relation(fields: [addressId], references: [id], onDelete: SetNull)
-  products        ProductOnOrder[]
-  cartTotal       Float
-  // Shipping fields: carrier (e.g., ไปรษณีย์, Flash, J&T) and tracking code
-  trackingCarrier String?
-  trackingCode    String?
-  orderStatus     OrderStatus      @default(NOT_PROCESSED)
-  stripePaymentId String
-  paymentMethod   String?
-  amount          Int
-  status          PaymentStatus
-  currency        String
-
-  orderedById Int?
-  orderedBy   User? @relation("UserOrders", fields: [orderedById], references: [id], onDelete: SetNull)
-
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  ReturnRequest ReturnRequest[]
-  reviews       Review[]
-}
-
-model ProductOnOrder {
-  id        Int     @id @default(autoincrement())
-  productId Int
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  // optional link to a variant if the ordered item is a sub-product
-  variantId Int?
-  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-
-  orderId Int
-  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  count Int
-  price Float
-}
-
-model ReturnRequest {
-  id           Int             @id @default(autoincrement())
-  orderId      Int
-  userId       Int
-  reason       String
-  customReason String?
-  status       String          @default("PENDING")
-  products     ReturnProduct[]
-  createdAt    DateTime        @default(now())
-  order        Order           @relation(fields: [orderId], references: [id])
-  user         User            @relation(fields: [userId], references: [id])
-}
-
-model ReturnProduct {
-  id              Int           @id @default(autoincrement())
-  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id])
-  returnRequestId Int
-  productId       Int
-  product         Product       @relation(fields: [productId], references: [id])
-}
-
-model Cart {
-  id        Int             @id @default(autoincrement())
-  products  ProductOnCart[]
-  cartTotal Float
-
-  orderedById Int?
-  orderedBy   User? @relation("UserCarts", fields: [orderedById], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model ProductOnCart {
-  id Int @id @default(autoincrement())
-
-  cartId Int
-  cart   Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
-
-  productId Int
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  // optional link to a variant if the cart item is a sub-product
-  variantId Int?
-  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-
-  count Int
-  price Float
-}
-
-model Review {
-  id        Int             @id @default(autoincrement())
-  productId Int
-  product   Product         @relation(fields: [productId], references: [id])
-  userId    Int
-  user      User            @relation(fields: [userId], references: [id])
-  rating    Int
-  comment   String
-  // Admin reply fields
-  reply     String?
-  replyById Int?
-  replyBy   User?           @relation("ReviewReply", fields: [replyById], references: [id], onDelete: SetNull)
-  repliedAt DateTime?
-  orderId   Int?
-  order     Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  variantId Int?
-  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-  // Attached images stored in DB
-  images    ReviewImage[]
-  createdAt DateTime        @default(now())
-}
-
-model ReviewImage {
-  id        Int      @id @default(autoincrement())
-  reviewId  Int
-  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  filename  String?
-  mime      String
-  data      Bytes
-  createdAt DateTime @default(now())
-}
-
-model Address {
-  id        Int     @id @default(autoincrement())
-  address   String
-  telephone String
-  name      String
-  userId    Int
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orders    Order[]
-}
-
-// TrackingSequence stores per-format+date counters for generating sequential tracking codes
-model TrackingSequence {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique // e.g. "ORD:20250914" or "SHOP001:20250914"
-  counter   Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
