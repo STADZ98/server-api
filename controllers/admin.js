@@ -211,15 +211,7 @@ exports.getOrdersAdmin = async (req, res) => {
                         }
                       : null,
                     image: productImage,
-                  }
-                : null,
-              variant: p.variant
-                ? {
-                    id: p.variant.id,
-                    title: p.variant.title,
-                    price: p.variant.price,
-                    quantity: p.variant.quantity,
-                    image: variantImage,
+                    variantImage: variantImage,
                   }
                 : null,
             };
