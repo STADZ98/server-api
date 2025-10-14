@@ -2,8 +2,32 @@
 exports.returnOrder = async (req, res) => {
   try {
     const orderId = Number(req.params.id);
-    const { productIds, reason, customReason } = req.body;
+    let { productIds, reason, customReason } = req.body || {};
     const userId = Number(req.user.id);
+
+    // If request was sent as multipart/form-data, productIds may be a JSON string.
+    if (typeof productIds === "string") {
+      try {
+        productIds = JSON.parse(productIds);
+      } catch (e) {
+        // If parsing fails, attempt to interpret as a single id or comma-separated list
+        if (productIds.indexOf("[") === -1 && productIds.indexOf(",") !== -1) {
+          productIds = productIds.split(",").map((s) => s.trim());
+        } else if (productIds.trim() !== "") {
+          productIds = [productIds];
+        } else {
+          productIds = [];
+        }
+      }
+    }
+
+    // Normalize productIds to array of numbers (if possible)
+    if (Array.isArray(productIds)) {
+      productIds = productIds
+        .map((p) => (typeof p === "string" ? p.trim() : p))
+        .filter((p) => p !== null && p !== undefined && p !== "")
+        .map((p) => (isNaN(Number(p)) ? p : Number(p)));
+    }
 
     // Validate order ownership and status
     const order = await prisma.order.findUnique({
