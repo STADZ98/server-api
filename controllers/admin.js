@@ -774,6 +774,7 @@ exports.getReturnRequests = async (req, res) => {
       where,
       include: {
         products: { include: { product: true } },
+        images: true, // include ReturnImage records so we can build accessible URLs
         user: { select: { id: true, email: true, picture: true } },
         order: { select: { id: true, orderStatus: true, trackingCode: true } },
       },
@@ -869,9 +870,30 @@ exports.getReturnRequests = async (req, res) => {
           })
         : [];
 
+      // Map return images (ReturnImage records) to accessible URLs. If an image
+      // is stored as an object with an id (ReturnImage), we point to the
+      // `/user/return-image/:id` route. For safety, use buildImageUrl to make
+      // absolute URLs when possible.
+      const mappedImages = Array.isArray(r.images)
+        ? r.images
+            .map((img) => {
+              try {
+                // Prefer building a server route for ReturnImage records
+                const potential =
+                  img && img.id ? `/user/return-image/${img.id}` : img;
+                const built = buildImageUrl(potential);
+                return built || null;
+              } catch (e) {
+                return null;
+              }
+            })
+            .filter(Boolean)
+        : [];
+
       return {
         ...r,
         products: mappedProducts,
+        images: mappedImages,
       };
     });
 
