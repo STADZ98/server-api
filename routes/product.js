@@ -10,7 +10,6 @@ const {
   createImages,
   removeImage,
   listBySubcategory,
-  listBySubsubcategory,
   listByBrand,
   productCounts,
 } = require("../controllers/product");
@@ -24,8 +23,6 @@ router.get("/products", listByBrand);
 router.post("/product", authCheck, adminCheck, create);
 router.get("/products/:count", list);
 router.get("/products/subcategory/:subcategoryId", listBySubcategory);
-// Lightweight listing for sub-subcategory
-router.get("/products/subsubcategory/:subsubcategoryId", listBySubsubcategory);
 router.put("/product/:id", authCheck, adminCheck, update);
 router.get("/product/:id", read);
 router.delete("/product/:id", authCheck, adminCheck, remove);

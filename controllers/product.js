@@ -477,54 +477,6 @@ exports.listBySubcategory = async (req, res) => {
   }
 };
 
-// List by sub-subcategory (lightweight summaries)
-exports.listBySubsubcategory = async (req, res) => {
-  try {
-    const { subsubcategoryId } = req.params;
-    const products = await prisma.product.findMany({
-      where: { subSubcategoryId: Number(subsubcategoryId) },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        title: true,
-        price: true,
-        quantity: true,
-        category: { select: { id: true, name: true } },
-        subcategory: { select: { id: true, name: true } },
-        subSubcategory: { select: { id: true, name: true } },
-        images: true,
-        createdAt: true,
-      },
-    });
-
-    const mapped = products.map((p) => {
-      const imgs = parseImagesField(p.images);
-      const first = imgs && imgs.length ? imgs.find(Boolean) : null;
-      const image = first ? buildImageUrl(first, req) : null;
-      return {
-        id: p.id,
-        title: p.title,
-        price: p.price,
-        quantity: p.quantity,
-        category: p.category,
-        subcategory: p.subcategory,
-        subSubcategory: p.subSubcategory,
-        image,
-        createdAt: p.createdAt,
-      };
-    });
-
-    res.setHeader("Cache-Control", "public, max-age=30");
-    res.json(mapped);
-  } catch (err) {
-    console.error(
-      "listBySubsubcategory error:",
-      err && err.stack ? err.stack : err
-    );
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
 // Flexible list
 exports.listby = async (req, res) => {
   try {
