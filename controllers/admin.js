@@ -862,15 +862,28 @@ exports.getReturnRequests = async (req, res) => {
           })
         : [];
 
-      // Map return images (ReturnImage records) to accessible URLs. If an image
-      // is stored as an object with an id (ReturnImage), we point to the
-      // `/user/return-image/:id` route. For safety, use buildImageUrl to make
-      // absolute URLs when possible.
+      // Map return images (ReturnImage records) to usable strings for frontend.
+      // Prefer embedding the binary as data:<mime>;base64,... when `img.data`
+      // is present, otherwise fall back to the `/user/return-image/:id` route.
       const mappedImages = Array.isArray(r.images)
         ? r.images
             .map((img) => {
               try {
-                // Prefer building a server route for ReturnImage records
+                if (!img) return null;
+                // If Prisma returned binary bytes, embed as data URL
+                if (img.data) {
+                  try {
+                    const buf = Buffer.isBuffer(img.data)
+                      ? img.data
+                      : Buffer.from(img.data);
+                    const mime = img.mime || "application/octet-stream";
+                    return `data:${mime};base64,${buf.toString("base64")}`;
+                  } catch (e) {
+                    // fallback to route if embedding fails
+                  }
+                }
+
+                // Fallback: build the external URL to the image route
                 const potential =
                   img && img.id ? `/user/return-image/${img.id}` : img;
                 const built = buildImageUrl(potential);
