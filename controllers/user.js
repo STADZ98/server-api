@@ -40,16 +40,62 @@ exports.returnOrder = async (req, res) => {
       include: { products: true },
     });
 
+    // If images were uploaded via multipart (multer -> req.files array), save them to ReturnImage
+    if (Array.isArray(req.files) && req.files.length > 0) {
+      try {
+        const imgs = req.files.map((f) => ({
+          returnRequestId: returnRequest.id,
+          filename: f.originalname,
+          mime: f.mimetype,
+          data: f.buffer,
+        }));
+        for (const img of imgs) {
+          await prisma.returnImage.create({ data: img });
+        }
+      } catch (e) {
+        console.error("Failed to save return images:", e);
+      }
+    }
+
+    // reload returnRequest to include images relation
+    const returnRequestWithImages = await prisma.returnRequest.findUnique({
+      where: { id: returnRequest.id },
+      include: {
+        products: true,
+        images: {
+          select: { id: true, filename: true, mime: true, createdAt: true },
+        },
+      },
+    });
+
     // Optionally, mark products as returned in order (if you have such a field)
     // await prisma.productOnOrder.updateMany({
     //   where: { orderId, productId: { in: productIds } },
     //   data: { returned: true },
     // });
 
-    res.json({ ok: true, returnRequest });
+    res.json({ ok: true, returnRequest: returnRequestWithImages });
   } catch (err) {
     console.error("returnOrder error:", err);
     res.status(500).json({ message: "Server Error" });
+  }
+};
+// Serve return image binary by image id
+exports.getReturnImage = async (req, res) => {
+  try {
+    const { imageId } = req.params;
+    const id = Number(imageId);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid imageId" });
+
+    const img = await prisma.returnImage.findUnique({ where: { id } });
+    if (!img) return res.status(404).json({ error: "Image not found" });
+
+    res.setHeader("Content-Type", img.mime || "application/octet-stream");
+    res.setHeader("Content-Length", img.data.length);
+    res.send(img.data);
+  } catch (err) {
+    console.error("Get return image error:", err);
+    res.status(500).json({ error: err.message });
   }
 };
 const prisma = require("../config/prisma");

@@ -19,6 +19,11 @@ const {
   returnOrder,
   uploadProfilePicture,
 } = require("../controllers/user");
+const multer = require("multer");
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 // 👤 User Management
 router.get("/users", authCheck, adminCheck, listUsers);
@@ -54,7 +59,27 @@ router.get(
 router.patch("/user/order/:id/cancel", authCheck, cancelOrder);
 
 // 📦 Order (Return Product)
-router.patch("/user/order/:id/return", authCheck, returnOrder);
+// Accept images via multipart/form-data in field name 'images'
+router.patch(
+  "/user/order/:id/return",
+  authCheck,
+  upload.array("images", 6),
+  returnOrder
+);
+
+// Serve return image binary by id (no auth required for now; could be protected)
+router.get("/user/return-image/:imageId", async (req, res, next) => {
+  try {
+    const controller = require("../controllers/user");
+    if (typeof controller.getReturnImage === "function") {
+      return controller.getReturnImage(req, res, next);
+    }
+    return res.status(501).json({ message: "Not implemented" });
+  } catch (err) {
+    console.error("route /user/return-image error:", err);
+    return res.status(500).json({ message: "Server Error" });
+  }
+});
 
 // 📮 Address (CRUD)
 router.post("/user/address", authCheck, saveAddress); // ✅ Create

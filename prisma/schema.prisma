@@ -159,8 +159,19 @@ model ReturnRequest {
   status       String          @default("PENDING")
   createdAt    DateTime        @default(now())
   products     ReturnProduct[]
+  images       ReturnImage[]
   order        Order           @relation(fields: [orderId], references: [id])
   user         User            @relation(fields: [userId], references: [id])
+}
+
+model ReturnImage {
+  id              Int           @id @default(autoincrement())
+  returnRequestId Int
+  filename        String?
+  mime            String
+  data            Bytes
+  createdAt       DateTime      @default(now())
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
 }
 
 model ReturnProduct {
