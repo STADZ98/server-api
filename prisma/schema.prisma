@@ -157,6 +157,8 @@ model ReturnRequest {
   reason       String
   customReason String?
   status       String          @default("PENDING")
+  adminNote    String?
+  handledAt    DateTime?
   createdAt    DateTime        @default(now())
   products     ReturnProduct[]
   images       ReturnImage[]

@@ -947,6 +947,7 @@ exports.getOrder = async (req, res) => {
         ReturnRequest: {
           include: {
             products: true,
+            images: true,
           },
         },
       },
@@ -1056,6 +1057,32 @@ exports.getOrder = async (req, res) => {
           trackingCarrier: o.trackingCarrier || null,
           trackingCode: o.trackingCode || null,
           shippingFee: o.shippingFee || 0,
+          // map return requests so frontend has easy access
+          returnRequests: Array.isArray(o.ReturnRequest)
+            ? o.ReturnRequest.map((rr) => ({
+                id: rr.id,
+                orderId: rr.orderId,
+                userId: rr.userId,
+                reason: rr.reason,
+                customReason: rr.customReason,
+                status: rr.status,
+                adminNote: rr.adminNote || null,
+                handledAt: rr.handledAt || null,
+                createdAt: rr.createdAt,
+                products: Array.isArray(rr.products)
+                  ? rr.products.map((rp) => ({
+                      id: rp.id,
+                      productId: rp.productId,
+                    }))
+                  : [],
+                images: Array.isArray(rr.images)
+                  ? rr.images.map((img) => ({
+                      id: img.id,
+                      filename: img.filename,
+                    }))
+                  : [],
+              }))
+            : [],
         }))
       : [];
 

@@ -922,15 +922,37 @@ exports.updateReturnRequestStatus = async (req, res) => {
     if (!status || !allowed.includes(status))
       return res.status(400).json({ message: "Invalid status" });
 
-    // Only update fields that exist on the ReturnRequest model in Prisma schema.
-    // The Prisma schema for ReturnRequest does not define `adminNote` or `handledAt`,
-    // so attempting to write them causes a Prisma error (500). Update only `status`.
-    const updated = await prisma.returnRequest.update({
-      where: { id },
-      data: { status },
-    });
+    // Build update payload; include handledAt/adminNote if provided (schema must have these fields)
+    const updateData = { status };
+    try {
+      if (adminNote !== undefined) updateData.adminNote = adminNote;
+      // set handledAt when status is final (APPROVED or REJECTED)
+      if (status === "APPROVED" || status === "REJECTED")
+        updateData.handledAt = new Date();
 
-    res.json({ ok: true, returnRequest: updated });
+      const updated = await prisma.returnRequest.update({
+        where: { id },
+        data: updateData,
+      });
+
+      res.json({ ok: true, returnRequest: updated });
+    } catch (err) {
+      // If the schema doesn't have adminNote/handledAt, fallback to updating only status
+      console.warn(
+        "updateReturnRequestStatus: full update failed, retrying with status only",
+        err?.message || err
+      );
+      try {
+        const updated = await prisma.returnRequest.update({
+          where: { id },
+          data: { status },
+        });
+        return res.json({ ok: true, returnRequest: updated });
+      } catch (err2) {
+        console.error("updateReturnRequestStatus error retry:", err2);
+        return res.status(500).json({ ok: false, message: "Server Error" });
+      }
+    }
   } catch (err) {
     console.error("updateReturnRequestStatus error:", err);
     res.status(500).json({ ok: false, message: "Server Error" });
