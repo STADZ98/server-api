@@ -50,6 +50,38 @@ exports.returnOrder = async (req, res) => {
     if (!reason || (reason === "อื่น ๆ" && !customReason)) {
       return res.status(400).json({ message: "กรุณาระบุเหตุผลในการคืนสินค้า" });
     }
+    // ตรวจสอบไม่ให้คืนสินค้าซ้ำ
+    const existingReturnRequests = await prisma.returnRequest.findMany({
+      where: {
+        orderId,
+        userId,
+        status: { in: ["PENDING", "APPROVED", "PROCESSING"] }, // เฉพาะที่ยังไม่ถูกปฏิเสธหรือยกเลิก
+        products: {
+          some: {
+            productId: { in: productIds },
+          },
+        },
+      },
+      include: { products: true },
+    });
+    if (existingReturnRequests.length > 0) {
+      // หาสินค้าที่ซ้ำ
+      const alreadyRequested = [];
+      for (const req of existingReturnRequests) {
+        for (const prod of req.products) {
+          if (productIds.includes(prod.productId)) {
+            alreadyRequested.push(prod.productId);
+          }
+        }
+      }
+      if (alreadyRequested.length > 0) {
+        return res.status(400).json({
+          message: `สินค้าบางรายการมีการยื่นขอคืนแล้ว: ${alreadyRequested.join(
+            ", "
+          )}`,
+        });
+      }
+    }
 
     // Save return request (assume you have a ReturnRequest table)
     const returnRequest = await prisma.returnRequest.create({
