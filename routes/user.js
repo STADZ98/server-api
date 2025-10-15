@@ -81,6 +81,20 @@ router.get("/user/return-image/:imageId", async (req, res, next) => {
   }
 });
 
+// Get a single return request (user must own it)
+router.get("/user/return-request/:id", authCheck, async (req, res, next) => {
+  try {
+    const controller = require("../controllers/user");
+    if (typeof controller.getReturnRequest === "function") {
+      return controller.getReturnRequest(req, res, next);
+    }
+    return res.status(501).json({ message: "Not implemented" });
+  } catch (err) {
+    console.error("route /user/return-request/:id error:", err);
+    return res.status(500).json({ message: "Server Error" });
+  }
+});
+
 // 📮 Address (CRUD)
 router.post("/user/address", authCheck, saveAddress); // ✅ Create
 router.get("/user/address", authCheck, getUserAddress); // ✅ Read (list)

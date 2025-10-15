@@ -154,6 +154,41 @@ exports.getReturnImage = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+// ✅ ดึงข้อมูลคำขอคืนสินค้าโดย id (ของผู้ใช้)
+exports.getReturnRequest = async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const userId = Number(req.user.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+
+    const rr = await prisma.returnRequest.findUnique({
+      where: { id },
+      include: {
+        products: { include: { product: true } },
+        images: true,
+        order: {
+          select: {
+            id: true,
+            orderStatus: true,
+            cartTotal: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!rr)
+      return res.status(404).json({ message: "Return request not found" });
+    if (rr.userId !== userId)
+      return res.status(403).json({ message: "ไม่อนุญาต" });
+
+    res.json({ ok: true, returnRequest: rr });
+  } catch (err) {
+    console.error("getReturnRequest error:", err);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
 const prisma = require("../config/prisma");
 let stripe = null;
 if (process.env.STRIPE_SECRET) {
