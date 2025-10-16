@@ -6,10 +6,6 @@ const compression = require("compression");
 const { readdirSync } = require("fs");
 const cors = require("cors");
 const path = require("path");
-const connectDB = require("./config/db");
-
-// เชื่อมต่อ MongoDB
-connectDB();
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "20mb" }));
@@ -52,18 +48,6 @@ app.use((req, res, next) => {
 console.log("Fallback CORS middleware installed");
 
 console.log("Mounting explicit routes");
-// Mount message route (Q&A)
-try {
-  const messageRoute = require(path.join(__dirname, "routes", "message"));
-  if (messageRoute && typeof messageRoute === "function")
-    app.use("/api/messages", messageRoute);
-  else console.warn("message route did not export a router");
-} catch (err) {
-  console.error(
-    "Failed to load routes/message.js:",
-    err && err.stack ? err.stack : err
-  );
-}
 // Mount explicit routes first (wrap requires to surface errors during dev)
 try {
   const subsub = require(path.join(__dirname, "routes", "subsubcategory"));

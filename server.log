@@ -1,0 +1,35 @@
+[dotenv@17.2.0] injecting env (4) from .env (tip: ⚙️  override existing env vars with { override: true })
+[dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild)
+CORS middleware applied
+Fallback CORS middleware installed
+Mounting explicit routes
+⚙️ Prisma: running in local dev mode with mock data
+Mounted subsubcategory (or failed)
+Mounted review (or failed)
+Mounted shipping (or failed)
+Loading route file admin.js
+Loaded route module admin.js
+Loading route file auth.js
+Loaded route module auth.js
+Loading route file brand.js
+Loaded route module brand.js
+Loading route file category.js
+Loaded route module category.js
+Loading route file dev.js
+Loaded route module dev.js
+Loading route file message.js
+Loaded route module message.js
+Loading route file product.js
+[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] })
+Loaded route module product.js
+Loading route file productVariant.js
+[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] })
+Loaded route module productVariant.js
+Loading route file stripe.js
+Loaded route module stripe.js
+Loading route file subcategory.js
+Loaded route module subcategory.js
+Loading route file user.js
+Loaded route module user.js
+Finished mounting routes
+Server listening locally on http://localhost:5005
